@@ -7,6 +7,7 @@ import { useDeleteProduct } from './hooks/useDeleteProduct';
 import { ProductList } from './components/ProductList';
 import { ProductForm } from './components/ProductForm';
 import { PDFButton } from './components/PDFButton';
+import { InstallPrompt } from './components/InstallPrompt';
 import type { ProductInput } from './types/product';
 import './App.css';
 
@@ -97,13 +98,10 @@ function App() {
       </main>
 
       {/* Floating PDF Button */}
-      <PDFButton
-        disabled={!hasProducts}
-        onClick={() => {
-          // Placeholder - PDF generation coming in PR #3
-          console.log('[App] PDF generation requested');
-        }}
-      />
+      <PDFButton disabled={!hasProducts} />
+
+      {/* PWA Install Prompt */}
+      <InstallPrompt />
 
       {/* Product Form Modal */}
       {showForm && (
