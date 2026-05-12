@@ -1,73 +1,92 @@
-# React + TypeScript + Vite
+# Produclist — Lista de Precios PWA
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite PWA para gestionar una lista editable de productos con exportación a PDF. Mobile-first, foco en Android.
 
-Currently, two official plugins are available:
+## Características
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Lista editable de productos** — agregar, editar, eliminar productos con doble-click o modal
+- **Agrupación por categoría** — Frutos Secos, Semillas/Cereal, Fruta Deshidratada, Legumbres
+- **Exportación a PDF** — generación de lista de precios en formato landscape A4
+- **Cálculo automático** — precio bruto = precio neto × 1.19
+- **100% offline** — datos en IndexedDB (Dexie.js), service worker para assets
+- **Instalable como app** — PWA con install prompt para Android Chrome
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Dependencia | Uso |
+|-------------|-----|
+| React 18 + Vite | Framework y build |
+| TypeScript | Tipado estático |
+| TailwindCSS v4 | Estilos |
+| Dexie.js | Base de datos local (IndexedDB) |
+| @react-pdf/renderer | Generación de PDF |
+| vite-plugin-pwa | Service worker y manifest |
 
-## Expanding the ESLint configuration
+## Scripts
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install          # Instalar dependencias
+npm run dev          # Desarrollo (http://localhost:5173)
+npm run build        # Build de producción
+npm run test         # Tests con Vitest
+npm run preview      # Preview del build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Estructura del proyecto
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
 ```
+src/
+├── components/       # Componentes React
+│   ├── ProductList.tsx    # Lista principal agrupada por categoría
+│   ├── ProductRow.tsx     # Fila editable de producto
+│   ├── ProductForm.tsx    # Modal para agregar/editar
+│   ├── CategoryGroup.tsx  # Sección colapsable por categoría
+│   ├── PDFButton.tsx      # Botón flotante de exportación PDF
+│   └── InstallPrompt.tsx  # Banner de instalación PWA
+├── db/
+│   ├── database.ts   # Schema de Dexie (products table)
+│   └── seed.ts       # Datos iniciales (~47 productos)
+├── hooks/            # useProducts, useAddProduct, etc.
+├── pdf/
+│   └── ProductPDFDocument.tsx  # Template del PDF
+├── types/
+│   └── product.ts    # Product, ProductInput, Category
+└── utils/
+    └── price.ts      # calcPrecioBruto
+```
+
+## Layout del PDF
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Lista de Precios          12/05/2026    Andes Granel    │
+├─────────────────────────────────────────────────────────┤
+│ PRODUCTO    │ FORMATO │ PRECIO NETO │ PRECIO BRUTO │ DISP │
+├─────────────┼─────────┼─────────────┼──────────────┼─────┤
+│ FRUTOS SECOS (categoría)                                    │
+│ Almendra...  │ 1 kg    │ $ 8.500     │ $ 10.115     │ Sí  │
+│ Pecán...     │ 500 g   │ $ 6.200     │ $ 7.378      │ Sí  │
+├─────────────┼─────────┼─────────────┼──────────────┼─────┤
+│ LEGUMBRES (categoría)                                       │
+│ ...                                                         │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Desarrollo
+
+```bash
+# Clonar y correr
+git clone https://github.com/Piwen99/produclist-pwa.git
+cd produclist-pwa
+npm install
+npm run dev
+```
+
+El servidor de desarrollo soporta HMR y regenera el PDF automáticamente cuando hay cambios.
+
+## Notas
+
+- **Foco mobile**: diseñado para 360px de ancho mínimo
+- **Bundle splitting**: el módulo de PDF (~1.4MB) se carga lazily solo cuando el usuario clickea "Generar PDF"
+- **Sin backend**: todos los datos persisten en el navegador del usuario
+- **47 productos precargados**: semilla incluye productos de prueba (frutos secos, semillas, fruta deshidratada, legumbres)
