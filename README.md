@@ -25,11 +25,11 @@ React + Vite PWA para gestionar una lista editable de productos con exportación
 ## Scripts
 
 ```bash
-npm install          # Instalar dependencias
-npm run dev          # Desarrollo (http://localhost:5173)
-npm run build        # Build de producción
-npm run test         # Tests con Vitest
-npm run preview      # Preview del build
+pnpm install         # Instalar dependencias
+pnpm dev             # Desarrollo (http://localhost:5173)
+pnpm build           # Build de producción
+pnpm test            # Tests con Vitest
+pnpm preview         # Preview del build
 ```
 
 ## Estructura del proyecto
@@ -78,8 +78,8 @@ src/
 # Clonar y correr
 git clone https://github.com/Piwen99/produclist-pwa.git
 cd produclist-pwa
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 El servidor de desarrollo soporta HMR y regenera el PDF automáticamente cuando hay cambios.
