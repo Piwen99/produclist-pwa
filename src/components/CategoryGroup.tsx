@@ -7,6 +7,7 @@ interface CategoryGroupProps {
   products: Product[];
   onUpdate: (id: number, changes: Partial<ProductInput>) => void;
   onDelete: (id: number) => void;
+  onStartEdit: (product: Product) => void;
 }
 
 const CATEGORY_ICONS: Record<Category, string> = {
@@ -23,7 +24,7 @@ const CATEGORY_COLORS: Record<Category, string> = {
   'Legumbres': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
 };
 
-export function CategoryGroup({ category, products, onUpdate, onDelete }: CategoryGroupProps) {
+export function CategoryGroup({ category, products, onUpdate, onDelete, onStartEdit }: CategoryGroupProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   const handleToggle = useCallback(() => {
@@ -87,6 +88,7 @@ export function CategoryGroup({ category, products, onUpdate, onDelete }: Catego
               product={product}
               onUpdate={onUpdate}
               onDelete={onDelete}
+              onStartEdit={onStartEdit}
             />
           ))}
         </div>

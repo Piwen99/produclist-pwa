@@ -8,7 +8,7 @@ import { ProductList } from './components/ProductList';
 import { ProductForm } from './components/ProductForm';
 import { PDFButton } from './components/PDFButton';
 import { InstallPrompt } from './components/InstallPrompt';
-import type { ProductInput } from './types/product';
+import type { Product, ProductInput } from './types/product';
 import './App.css';
 
 function App() {
@@ -18,6 +18,7 @@ function App() {
   const { remove } = useDeleteProduct();
 
   const [showForm, setShowForm] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // Seed database on mount
   useEffect(() => {
@@ -43,6 +44,14 @@ function App() {
     }
   }, [add]);
 
+  const handleEditProduct = useCallback((product: Product) => {
+    setEditingProduct(product);
+  }, []);
+
+  const handleCloseEdit = useCallback(() => {
+    setEditingProduct(null);
+  }, []);
+
   const handleUpdateProduct = useCallback(async (id: number, changes: Partial<ProductInput>) => {
     try {
       await update(id, changes);
@@ -52,6 +61,18 @@ function App() {
       alert(message);
     }
   }, [update]);
+
+  const handleSaveEdit = useCallback(async (data: ProductInput) => {
+    if (!editingProduct?.id) return;
+    try {
+      await update(editingProduct.id, data);
+      setEditingProduct(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error al actualizar el producto.';
+      console.error('Error updating product:', error);
+      alert(message);
+    }
+  }, [update, editingProduct]);
 
   const handleDeleteProduct = useCallback(async (id: number) => {
     try {
@@ -96,6 +117,7 @@ function App() {
           products={products}
           onUpdate={handleUpdateProduct}
           onDelete={handleDeleteProduct}
+          onStartEdit={handleEditProduct}
         />
       </main>
 
@@ -105,11 +127,20 @@ function App() {
       {/* PWA Install Prompt */}
       <InstallPrompt />
 
-      {/* Product Form Modal */}
+      {/* Product Form - Create Modal */}
       {showForm && (
         <ProductForm
           onSubmit={handleSubmitProduct}
           onCancel={handleCloseForm}
+        />
+      )}
+
+      {/* Product Form - Edit Modal */}
+      {editingProduct && (
+        <ProductForm
+          product={editingProduct}
+          onSubmit={handleSaveEdit}
+          onCancel={handleCloseEdit}
         />
       )}
 

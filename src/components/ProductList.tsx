@@ -6,6 +6,7 @@ interface ProductListProps {
   products: Product[] | undefined;
   onUpdate: (id: number, changes: Partial<ProductInput>) => void;
   onDelete: (id: number) => void;
+  onStartEdit: (product: Product) => void;
 }
 
 const CATEGORY_ORDER: Category[] = [
@@ -15,7 +16,7 @@ const CATEGORY_ORDER: Category[] = [
   'Legumbres',
 ];
 
-export function ProductList({ products, onUpdate, onDelete }: ProductListProps) {
+export function ProductList({ products, onUpdate, onDelete, onStartEdit }: ProductListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -225,6 +226,7 @@ export function ProductList({ products, onUpdate, onDelete }: ProductListProps) 
               products={categoryProducts}
               onUpdate={onUpdate}
               onDelete={onDelete}
+              onStartEdit={onStartEdit}
             />
           );
         })}
