@@ -16,6 +16,12 @@ export const db = new ProduclistDB();
 
 // CRUD Helpers
 export async function addProduct(product: ProductInput): Promise<number> {
+  // Prevent duplicates by name
+  const existing = await db.products.where('nombre').equals(product.nombre).first();
+  if (existing) {
+    throw new Error(`Ya existe un producto llamado "${product.nombre}"`);
+  }
+
   return await db.products.add({
     ...product,
     disponible: product.disponible ?? true
@@ -23,6 +29,13 @@ export async function addProduct(product: ProductInput): Promise<number> {
 }
 
 export async function updateProduct(id: number, changes: Partial<ProductInput>): Promise<void> {
+  // If renaming, check the new name doesn't conflict with another product
+  if (changes.nombre) {
+    const existing = await db.products.where('nombre').equals(changes.nombre).first();
+    if (existing && existing.id !== id) {
+      throw new Error(`Ya existe un producto llamado "${changes.nombre}"`);
+    }
+  }
   await db.products.update(id, changes);
 }
 
@@ -36,4 +49,34 @@ export async function getAllProducts(): Promise<Product[]> {
 
 export async function getProductById(id: number): Promise<Product | undefined> {
   return await db.products.get(id);
+}
+
+/**
+ * Remove duplicate products by name, keeping the entry with the lowest ID.
+ * Safe to call multiple times (idempotent).
+ */
+export async function deduplicateProducts(): Promise<number> {
+  const allProducts = await db.products.toArray();
+  const seen = new Map<string, number[]>();
+
+  for (const p of allProducts) {
+    const ids = seen.get(p.nombre) ?? [];
+    ids.push(p.id!);
+    seen.set(p.nombre, ids);
+  }
+
+  const toDelete: number[] = [];
+  for (const [, ids] of seen) {
+    if (ids.length > 1) {
+      ids.sort((a, b) => a - b);
+      toDelete.push(...ids.slice(1));
+    }
+  }
+
+  if (toDelete.length > 0) {
+    await db.products.bulkDelete(toDelete);
+    console.log(`[Dedup] Removed ${toDelete.length} duplicate products`);
+  }
+
+  return toDelete.length;
 }

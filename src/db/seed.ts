@@ -1,4 +1,4 @@
-import { db } from './database';
+import { db, deduplicateProducts } from './database';
 import type { ProductInput } from '../types/product';
 
 export const seedProducts: ProductInput[] = [
@@ -65,11 +65,21 @@ export const seedProducts: ProductInput[] = [
 ];
 
 export async function seedDatabase(): Promise<void> {
-  const count = await db.products.count();
-  if (count === 0) {
-    await db.products.bulkAdd(seedProducts);
-    console.log(`[Seed] Added ${seedProducts.length} products to database`);
-  } else {
-    console.log(`[Seed] Database already has ${count} products, skipping seed`);
+  // Clean any existing duplicates first (idempotent)
+  const removed = await deduplicateProducts();
+  if (removed > 0) {
+    console.log(`[Seed] Removed ${removed} duplicate products before seeding`);
   }
+
+  // Transaction ensures atomicity: if StrictMode fires twice,
+  // the second call waits for the first and sees count > 0
+  await db.transaction('rw', db.products, async () => {
+    const count = await db.products.count();
+    if (count === 0) {
+      await db.products.bulkAdd(seedProducts);
+      console.log(`[Seed] Added ${seedProducts.length} products to database`);
+    } else {
+      console.log(`[Seed] Database already has ${count} products, skipping seed`);
+    }
+  });
 }

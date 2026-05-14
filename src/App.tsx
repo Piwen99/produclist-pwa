@@ -37,8 +37,9 @@ function App() {
       await add(data);
       setShowForm(false);
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error al crear el producto. Por favor intenta de nuevo.';
       console.error('Error adding product:', error);
-      alert('Error al crear el producto. Por favor intenta de nuevo.');
+      alert(message);
     }
   }, [add]);
 
@@ -46,8 +47,9 @@ function App() {
     try {
       await update(id, changes);
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error al actualizar el producto.';
       console.error('Error updating product:', error);
-      alert('Error al actualizar el producto. Por favor intenta de nuevo.');
+      alert(message);
     }
   }, [update]);
 

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { Product, ProductInput, Category } from '../types/product';
 import { calcPrecioBruto } from '../utils/price';
+import { ConfirmDialog } from './ConfirmDialog';
 
 interface ProductRowProps {
   product: Product;
@@ -17,6 +18,7 @@ const CATEGORIES: Category[] = [
 
 export function ProductRow({ product, onUpdate, onDelete }: ProductRowProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [editData, setEditData] = useState<ProductInput>({
     nombre: product.nombre,
     formato: product.formato,
@@ -57,10 +59,13 @@ export function ProductRow({ product, onUpdate, onDelete }: ProductRowProps) {
   }, [editData, product, onUpdate]);
 
   const handleDelete = useCallback(() => {
-    if (confirm(`¿Eliminar "${product.nombre}"?`)) {
-      onDelete(product.id!);
-    }
-  }, [product, onDelete]);
+    setShowConfirm(true);
+  }, []);
+
+  const handleConfirmDelete = useCallback(() => {
+    setShowConfirm(false);
+    onDelete(product.id!);
+  }, [onDelete, product]);
 
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('es-CL', {
@@ -70,8 +75,9 @@ export function ProductRow({ product, onUpdate, onDelete }: ProductRowProps) {
     }).format(amount);
   };
 
-  if (isEditing) {
-    return (
+  return (
+    <>
+    {isEditing ? (
       <div className="product-row product-row--editing bg-white dark:bg-gray-800 p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="sm:col-span-2">
@@ -165,10 +171,7 @@ export function ProductRow({ product, onUpdate, onDelete }: ProductRowProps) {
           </button>
         </div>
       </div>
-    );
-  }
-
-  return (
+    ) : (
     <div
       onDoubleClick={handleStartEdit}
       className={`product-row flex items-center justify-between p-3 sm:p-4 border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
@@ -185,13 +188,20 @@ export function ProductRow({ product, onUpdate, onDelete }: ProductRowProps) {
           </span>
         </div>
         <div className="flex items-center gap-2 mt-1">
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${
-            product.disponible
-              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-              : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-          }`}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onUpdate(product.id!, { disponible: !product.disponible });
+            }}
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium transition-colors touch-manipulation cursor-pointer ${
+              product.disponible
+                ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-900'
+                : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+            aria-label={product.disponible ? 'Marcar como no disponible' : 'Marcar como disponible'}
+          >
             {product.disponible ? 'Disponible' : 'No disponible'}
-          </span>
+          </button>
         </div>
       </div>
       <div className="flex flex-col items-end gap-1 ml-4">
@@ -217,5 +227,16 @@ export function ProductRow({ product, onUpdate, onDelete }: ProductRowProps) {
         </button>
       </div>
     </div>
-  );
+  )}
+  <ConfirmDialog
+    isOpen={showConfirm}
+    title="Eliminar producto"
+    message="¿Estás seguro de eliminar"
+    itemName={product.nombre}
+    confirmLabel="Eliminar"
+    cancelLabel="Cancelar"
+    onConfirm={handleConfirmDelete}
+    onCancel={() => setShowConfirm(false)}
+  />
+</>);
 }
