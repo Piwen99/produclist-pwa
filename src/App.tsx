@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { seedDatabase } from './db/seed';
 import { useProducts } from './hooks/useProducts';
 import { useAddProduct } from './hooks/useAddProduct';
@@ -8,6 +8,7 @@ import { ProductList } from './components/ProductList';
 import { ProductForm } from './components/ProductForm';
 import { PDFButton } from './components/PDFButton';
 import { InstallPrompt } from './components/InstallPrompt';
+import { exportToJSON, exportToCSV, importProducts } from './utils/exportImport';
 import type { Product, ProductInput } from './types/product';
 import './App.css';
 
@@ -19,6 +20,8 @@ function App() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Seed database on mount
   useEffect(() => {
@@ -83,6 +86,43 @@ function App() {
     }
   }, [remove]);
 
+  const handleExportJSON = useCallback(() => {
+    if (!products) return;
+    exportToJSON(products);
+  }, [products]);
+
+  const handleExportCSV = useCallback(() => {
+    if (!products) return;
+    exportToCSV(products);
+  }, [products]);
+
+  const handleImportClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleImportFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const result = await importProducts(file);
+      const parts: string[] = [];
+      if (result.success > 0) parts.push(`${result.success} agregados`);
+      if (result.updated > 0) parts.push(`${result.updated} actualizados`);
+      if (result.errors.length > 0) parts.push(`${result.errors.length} errores`);
+
+      setImportMessage(`Importación completada: ${parts.join(', ')}.`);
+      if (result.errors.length > 0) {
+        console.warn('[Import] Errors:', result.errors);
+      }
+    } catch (err) {
+      setImportMessage(err instanceof Error ? err.message : 'Error al importar.');
+    }
+
+    // Reset file input so the same file can be re-selected
+    e.target.value = '';
+  }, []);
+
   const hasProducts = products && products.length > 0;
 
   return (
@@ -97,6 +137,40 @@ function App() {
                 Produclist
               </h1>
             </div>
+            {/* Export buttons */}
+            <button
+              onClick={handleExportJSON}
+              disabled={!hasProducts}
+              title="Exportar JSON"
+              className="p-2 text-gray-500 hover:text-orange-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-manipulation"
+              aria-label="Exportar productos como JSON"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            </button>
+            <button
+              onClick={handleExportCSV}
+              disabled={!hasProducts}
+              title="Exportar CSV"
+              className="p-2 text-gray-500 hover:text-orange-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-manipulation"
+              aria-label="Exportar productos como CSV"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </button>
+            {/* Import button */}
+            <button
+              onClick={handleImportClick}
+              title="Importar productos"
+              className="p-2 text-gray-500 hover:text-orange-500 transition-colors touch-manipulation"
+              aria-label="Importar productos desde archivo"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+            </button>
             <button
               onClick={handleAddNew}
               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors touch-manipulation"
@@ -110,6 +184,34 @@ function App() {
           </div>
         </div>
       </header>
+
+      {/* Hidden file input for import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,application/json"
+        onChange={handleImportFile}
+        className="hidden"
+        aria-hidden="true"
+      />
+
+      {/* Import message notification */}
+      {importMessage && (
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 pt-4 sm:pt-6">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+            <p className="text-sm text-blue-800 dark:text-blue-200">{importMessage}</p>
+            <button
+              onClick={() => setImportMessage(null)}
+              className="shrink-0 p-1 text-blue-500 hover:text-blue-700 transition-colors touch-manipulation"
+              aria-label="Cerrar notificación"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
