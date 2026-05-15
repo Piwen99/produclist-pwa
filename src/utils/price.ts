@@ -1,4 +1,19 @@
 /**
+ * Parse Chilean decimal format string to number
+ * Replaces comma with period and parses as float
+ * @param formato - Chilean decimal string (e.g., "11,34")
+ * @returns Parsed number, or 0 if invalid
+ */
+export function parseChileanNumber(formato: string): number {
+  if (!formato) return 0;
+  const parsed = parseFloat(formato.replace(',', '.'));
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+/** Alias for parseChileanNumber — used in quote calculations */
+export const parseFormato = parseChileanNumber;
+
+/**
  * Calculate gross price (precio bruto) from net price (precio neto)
  * Applies 19% VAT/IVA (Chile)
  * @param precioNeto - Net price
