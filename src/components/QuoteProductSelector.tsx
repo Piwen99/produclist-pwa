@@ -11,7 +11,7 @@ export function QuoteProductSelector({ onSelect }: QuoteProductSelectorProps) {
   const [searchTerm, setSearchTerm] = useState('');
 
   const products = useLiveQuery(
-    () => db.products.where('disponible').equals(1).toArray(),
+    () => db.products.toArray(),
     []
   );
 

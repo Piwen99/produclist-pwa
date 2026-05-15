@@ -18,7 +18,7 @@ export function useProductsByCategory(category: string): Product[] | undefined {
 
 export function useAvailableProducts(): Product[] | undefined {
   return useLiveQuery(
-    () => db.products.where('disponible').equals(1).toArray(),
+    () => db.products.toArray(),
     []
   );
 }
