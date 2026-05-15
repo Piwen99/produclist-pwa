@@ -4,10 +4,12 @@ import { useProducts } from './hooks/useProducts';
 import { useAddProduct } from './hooks/useAddProduct';
 import { useUpdateProduct } from './hooks/useUpdateProduct';
 import { useDeleteProduct } from './hooks/useDeleteProduct';
+import { useQuote } from './hooks/useQuote';
 import { ProductList } from './components/ProductList';
 import { ProductForm } from './components/ProductForm';
 import { PDFButton } from './components/PDFButton';
 import { InstallPrompt } from './components/InstallPrompt';
+import { Cotizador } from './components/Cotizador';
 import { exportToJSON, exportToCSV, importProducts } from './utils/exportImport';
 import type { Product, ProductInput } from './types/product';
 import './App.css';
@@ -18,10 +20,14 @@ function App() {
   const { update } = useUpdateProduct();
   const { remove } = useDeleteProduct();
 
+  const [activeView, setActiveView] = useState<'products' | 'cotizador'>('products');
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Cotizador state
+  const { items, addItem, removeItem, updateItemQty, updateItemPrecioKg, totals } = useQuote();
 
   // Seed database on mount
   useEffect(() => {
@@ -136,6 +142,33 @@ function App() {
               <h1 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">
                 Produclist
               </h1>
+              {/* View tabs */}
+              <div className="flex items-center ml-4 border-l border-gray-200 dark:border-gray-700 pl-4">
+                <button
+                  onClick={() => setActiveView('products')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                    activeView === 'products'
+                      ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+                  role="tab"
+                  aria-selected={activeView === 'products'}
+                >
+                  Productos
+                </button>
+                <button
+                  onClick={() => setActiveView('cotizador')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors touch-manipulation ml-1 ${
+                    activeView === 'cotizador'
+                      ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+                  role="tab"
+                  aria-selected={activeView === 'cotizador'}
+                >
+                  Cotizador
+                </button>
+              </div>
             </div>
             {/* Export buttons */}
             <button
@@ -215,12 +248,23 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
-        <ProductList
-          products={products}
-          onUpdate={handleUpdateProduct}
-          onDelete={handleDeleteProduct}
-          onStartEdit={handleEditProduct}
-        />
+        {activeView === 'products' ? (
+          <ProductList
+            products={products}
+            onUpdate={handleUpdateProduct}
+            onDelete={handleDeleteProduct}
+            onStartEdit={handleEditProduct}
+          />
+        ) : (
+          <Cotizador
+            items={items}
+            totals={totals}
+            onAddProduct={addItem}
+            onUpdateQty={updateItemQty}
+            onUpdatePrecioKg={updateItemPrecioKg}
+            onRemove={removeItem}
+          />
+        )}
       </main>
 
       {/* Floating PDF Button */}
