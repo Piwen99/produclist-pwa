@@ -5,6 +5,7 @@ import { useAddProduct } from './hooks/useAddProduct';
 import { useUpdateProduct } from './hooks/useUpdateProduct';
 import { useDeleteProduct } from './hooks/useDeleteProduct';
 import { useQuote } from './hooks/useQuote';
+import { useToast } from './hooks/useToast';
 import { ProductList } from './components/ProductList';
 import { ProductForm } from './components/ProductForm';
 import { PDFButton } from './components/PDFButton';
@@ -19,11 +20,11 @@ function App() {
   const { add } = useAddProduct();
   const { update } = useUpdateProduct();
   const { remove } = useDeleteProduct();
+  const { toast } = useToast();
 
   const [activeView, setActiveView] = useState<'products' | 'cotizador'>('products');
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [importMessage, setImportMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Cotizador state
@@ -49,9 +50,9 @@ function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al crear el producto. Por favor intenta de nuevo.';
       console.error('Error adding product:', error);
-      alert(message);
+      toast.error(message);
     }
-  }, [add]);
+  }, [add, toast]);
 
   const handleEditProduct = useCallback((product: Product) => {
     setEditingProduct(product);
@@ -67,9 +68,9 @@ function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al actualizar el producto.';
       console.error('Error updating product:', error);
-      alert(message);
+      toast.error(message);
     }
-  }, [update]);
+  }, [update, toast]);
 
   const handleSaveEdit = useCallback(async (data: ProductInput) => {
     if (!editingProduct?.id) return;
@@ -79,18 +80,18 @@ function App() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al actualizar el producto.';
       console.error('Error updating product:', error);
-      alert(message);
+      toast.error(message);
     }
-  }, [update, editingProduct]);
+  }, [update, editingProduct, toast]);
 
   const handleDeleteProduct = useCallback(async (id: number) => {
     try {
       await remove(id);
     } catch (error) {
       console.error('Error deleting product:', error);
-      alert('Error al eliminar el producto. Por favor intenta de nuevo.');
+      toast.error('Error al eliminar el producto. Por favor intenta de nuevo.');
     }
-  }, [remove]);
+  }, [remove, toast]);
 
   const handleExportJSON = useCallback(() => {
     if (!products) return;
@@ -117,17 +118,17 @@ function App() {
       if (result.updated > 0) parts.push(`${String(result.updated)} actualizados`);
       if (result.errors.length > 0) parts.push(`${String(result.errors.length)} errores`);
 
-      setImportMessage(`Importación completada: ${parts.join(', ')}.`);
+      toast.success(`Importación completada: ${parts.join(', ')}.`);
       if (result.errors.length > 0) {
         console.warn('[Import] Errors:', result.errors);
       }
     } catch (err) {
-      setImportMessage(err instanceof Error ? err.message : 'Error al importar.');
+      toast.error(err instanceof Error ? err.message : 'Error al importar.');
     }
 
     // Reset file input so the same file can be re-selected
     e.target.value = '';
-  }, []);
+  }, [toast]);
 
   const hasProducts = products && products.length > 0;
 
@@ -227,24 +228,6 @@ function App() {
         className="hidden"
         aria-hidden="true"
       />
-
-      {/* Import message notification */}
-      {importMessage && (
-        <div className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 pt-4 sm:pt-6">
-          <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-            <p className="text-sm text-blue-800 dark:text-blue-200">{importMessage}</p>
-            <button
-              onClick={() => setImportMessage(null)}
-              className="shrink-0 p-1 text-blue-500 hover:text-blue-700 transition-colors touch-manipulation"
-              aria-label="Cerrar notificación"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
