@@ -44,7 +44,7 @@ export function ProductList({ products, onUpdate, onDelete, onStartEdit }: Produ
 
   // Group filtered products by category
   const groupedProducts = useMemo(() => {
-    if (!filteredProducts) return {} as Record<Category, Product[]>;
+    if (!filteredProducts) return {};
 
     const grouped: Partial<Record<Category, Product[]>> = {};
 
@@ -55,20 +55,23 @@ export function ProductList({ products, onUpdate, onDelete, onStartEdit }: Produ
 
     // Group products
     filteredProducts.forEach(product => {
-      if (!grouped[product.categoria]) {
-        grouped[product.categoria] = [];
+      let products = grouped[product.categoria];
+      if (!products) {
+        products = [];
+        grouped[product.categoria] = products;
       }
-      grouped[product.categoria]!.push(product);
+      products.push(product);
     });
 
     // Sort products within each category by name
     CATEGORY_ORDER.forEach(cat => {
-      if (grouped[cat]) {
-        grouped[cat]!.sort((a, b) => a.nombre.localeCompare(b.nombre));
+      const products = grouped[cat];
+      if (products) {
+        products.sort((a, b) => a.nombre.localeCompare(b.nombre));
       }
     });
 
-    return grouped as Record<Category, Product[]>;
+    return grouped;
   }, [filteredProducts]);
 
   // Check if we have any products
@@ -77,7 +80,10 @@ export function ProductList({ products, onUpdate, onDelete, onStartEdit }: Produ
   const isSearching = searchTerm.trim().length > 0;
   const filteredCount = filteredProducts?.length ?? 0;
   const hasFilteredResults = filteredCount > 0;
-  const hasGroupedResults = CATEGORY_ORDER.some(cat => (groupedProducts[cat]?.length ?? 0) > 0);
+  const hasGroupedResults = CATEGORY_ORDER.some(cat => {
+    const products = groupedProducts[cat];
+    return products !== undefined && products.length > 0;
+  });
 
   // Keyboard shortcut: Ctrl+/ or Cmd+/ to focus search
   useEffect(() => {
@@ -215,7 +221,7 @@ export function ProductList({ products, onUpdate, onDelete, onStartEdit }: Produ
       <div className="space-y-2 sm:space-y-4">
         {CATEGORY_ORDER.map(category => {
           const categoryProducts = groupedProducts[category];
-          if (!categoryProducts || categoryProducts.length === 0) {
+          if (categoryProducts === undefined || categoryProducts.length === 0) {
             return null;
           }
 

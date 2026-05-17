@@ -43,7 +43,7 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
     return Object.keys(newErrors).length === 0;
   }, [formData]);
 
-  const handleSubmit = useCallback((e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.SyntheticEvent) => {
     e.preventDefault();
     if (validate()) {
       onSubmit(formData);

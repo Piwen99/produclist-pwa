@@ -22,10 +22,11 @@ export async function addProduct(product: ProductInput): Promise<number> {
     throw new Error(`Ya existe un producto llamado "${product.nombre}"`);
   }
 
-  return await db.products.add({
+  const id: number = await db.products.add({
     ...product,
-    disponible: product.disponible ?? true
-  });
+    disponible: product.disponible,
+  }) as number;
+  return id;
 }
 
 export async function updateProduct(id: number, changes: Partial<ProductInput>): Promise<void> {
@@ -60,8 +61,10 @@ export async function deduplicateProducts(): Promise<number> {
   const seen = new Map<string, number[]>();
 
   for (const p of allProducts) {
+    const productId = p.id;
+    if (productId === undefined) continue;
     const ids = seen.get(p.nombre) ?? [];
-    ids.push(p.id!);
+    ids.push(productId);
     seen.set(p.nombre, ids);
   }
 
@@ -75,7 +78,7 @@ export async function deduplicateProducts(): Promise<number> {
 
   if (toDelete.length > 0) {
     await db.products.bulkDelete(toDelete);
-    console.log(`[Dedup] Removed ${toDelete.length} duplicate products`);
+    console.log(`[Dedup] Removed ${String(toDelete.length)} duplicate products`);
   }
 
   return toDelete.length;

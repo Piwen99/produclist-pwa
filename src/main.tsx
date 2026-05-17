@@ -4,7 +4,9 @@ import './index.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 
-createRoot(document.getElementById('root')!).render(
+const rootElement = document.getElementById('root');
+if (!rootElement) throw new Error('Root element not found');
+createRoot(rootElement).render(
   <StrictMode>
     <ErrorBoundary>
       <App />
@@ -18,7 +20,7 @@ if ('serviceWorker' in navigator) {
     .then((registration) => {
       console.log('[SW] Service Worker ready:', registration.scope);
     })
-    .catch((error) => {
+    .catch((error: unknown) => {
       console.error('[SW] Service Worker ready failed:', error);
     });
 }

@@ -3,19 +3,15 @@ import { useState, useEffect, useCallback } from 'react';
 export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
-  const [isInstalled, setIsInstalled] = useState(false);
-
-  useEffect(() => {
-    // Check if already in standalone mode (installed PWA)
+  const [isInstalled, setIsInstalled] = useState(() => {
     const isStandalone =
       window.matchMedia('(display-mode: standalone)').matches ||
-      // iOS fallback
       (navigator as unknown as { standalone?: boolean }).standalone === true;
+    return isStandalone;
+  });
 
-    if (isStandalone) {
-      setIsInstalled(true);
-      return;
-    }
+  useEffect(() => {
+    if (isInstalled) return;
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -36,12 +32,12 @@ export function InstallPrompt() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, []);
+  }, [isInstalled]);
 
   const handleInstallClick = useCallback(async () => {
     if (!deferredPrompt) return;
 
-    deferredPrompt.prompt();
+    void deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
 
     if (outcome === 'accepted') {
@@ -82,7 +78,7 @@ export function InstallPrompt() {
         </div>
         <div className="mt-3 flex gap-2">
           <button
-            onClick={handleInstallClick}
+            onClick={() => { void handleInstallClick(); }}
             className="flex-1 px-3 py-2 text-xs font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors"
           >
             Instalar

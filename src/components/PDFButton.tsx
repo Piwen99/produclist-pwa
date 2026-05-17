@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { getPDFFileName } from '../pdf/pdfFilename';
 
 interface PDFModule {
   PDFDownloadLink: typeof import('@react-pdf/renderer').PDFDownloadLink;
   ProductPDFDocument: typeof import('../pdf/ProductPDFDocument').ProductPDFDocument;
-  getPDFFileName: typeof import('../pdf/ProductPDFDocument').getPDFFileName;
 }
 
 interface PDFButtonProps {
@@ -30,7 +30,6 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
           setPdfModule({
             PDFDownloadLink: mod.PDFDownloadLink,
             ProductPDFDocument: mod.ProductPDFDocument,
-            getPDFFileName: mod.getPDFFileName,
           });
           setPdfState('ready');
         }
@@ -49,7 +48,7 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
       }
     };
 
-    loadModule();
+    void loadModule();
 
     return () => {
       cancelled = true;
@@ -146,7 +145,7 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
     <>
       <pdfModule.PDFDownloadLink
         document={<pdfModule.ProductPDFDocument />}
-        fileName={pdfModule.getPDFFileName()}
+        fileName={getPDFFileName()}
       >
         {({ loading, error }) => (
           <button

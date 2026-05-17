@@ -193,7 +193,7 @@ const CATEGORY_ORDER: Category[] = [
 function formatDate(date: Date): string {
   const d = String(date.getDate()).padStart(2, '0');
   const m = String(date.getMonth() + 1).padStart(2, '0');
-  const y = date.getFullYear();
+  const y = String(date.getFullYear());
   return `${d}/${m}/${y}`;
 }
 
@@ -201,16 +201,17 @@ function formatPrice(value: number): string {
   return `$ ${value.toLocaleString('es-CL')}`;
 }
 
-function groupByCategory(products: Product[]): Record<Category, Product[]> {
-  const groups = {} as Record<Category, Product[]>;
+function groupByCategory(products: Product[]): Partial<Record<Category, Product[]>> {
+  const groups: Partial<Record<Category, Product[]>> = {};
   for (const cat of CATEGORY_ORDER) {
     groups[cat] = [];
   }
   for (const p of products) {
-    if (groups[p.categoria]) {
-      groups[p.categoria].push(p);
+    const entry = groups[p.categoria];
+    if (entry) {
+      entry.push(p);
     } else {
-      (groups as Record<string, Product[]>)[p.categoria] = [p];
+      groups[p.categoria] = [p];
     }
   }
   return groups;
@@ -309,12 +310,12 @@ export function ProductPDFDocument({ products: propProducts }: ProductPDFDocumen
   const grouped = groupByCategory(products);
 
   // Compute cumulative indices so alternating colors flow across categories
-  let globalIndex = 0;
-  const categorySections = CATEGORY_ORDER.map((cat) => {
-    const currentIndex = globalIndex;
-    globalIndex += grouped[cat].length;
-    return { cat, products: grouped[cat], startIndex: currentIndex };
-  });
+  const categorySections = CATEGORY_ORDER.reduce<{ cat: Category; products: Product[]; startIndex: number }[]>((sections, cat) => {
+    const categoryProducts = grouped[cat] ?? [];
+    const startIndex = sections.reduce((sum, s) => sum + s.products.length, 0);
+    sections.push({ cat, products: categoryProducts, startIndex });
+    return sections;
+  }, []);
 
   return (
     <Document>
@@ -350,17 +351,6 @@ export function ProductPDFDocument({ products: propProducts }: ProductPDFDocumen
       </Page>
     </Document>
   );
-}
-
-// ------------------------------------------------------------------
-// Filename helper
-// ------------------------------------------------------------------
-export function getPDFFileName(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `lista-precios-${y}-${m}-${d}.pdf`;
 }
 
 // Re-export PDFDownloadLink for consumers

@@ -68,7 +68,7 @@ export async function seedDatabase(): Promise<void> {
   // Clean any existing duplicates first (idempotent)
   const removed = await deduplicateProducts();
   if (removed > 0) {
-    console.log(`[Seed] Removed ${removed} duplicate products before seeding`);
+    console.log(`[Seed] Removed ${String(removed)} duplicate products before seeding`);
   }
 
   // Transaction ensures atomicity: if StrictMode fires twice,
@@ -77,9 +77,9 @@ export async function seedDatabase(): Promise<void> {
     const count = await db.products.count();
     if (count === 0) {
       await db.products.bulkAdd(seedProducts);
-      console.log(`[Seed] Added ${seedProducts.length} products to database`);
+      console.log(`[Seed] Added ${String(seedProducts.length)} products to database`);
     } else {
-      console.log(`[Seed] Database already has ${count} products, skipping seed`);
+      console.log(`[Seed] Database already has ${String(count)} products, skipping seed`);
     }
   });
 }

@@ -85,15 +85,21 @@ export async function importProducts(file: File): Promise<ImportResult> {
     }
 
     if (!raw.categoria || typeof raw.categoria !== 'string') {
-      result.errors.push({ nombre: raw.nombre as string, error: 'Campo "categoria" obligatorio.' });
+      const name = typeof raw.nombre === 'string' ? raw.nombre : '(sin nombre)';
+      result.errors.push({ nombre: name, error: 'Campo "categoria" obligatorio.' });
       continue;
     }
 
+    const rawNombre = raw.nombre;
+    const rawCategoria = raw.categoria;
+    const rawFormato = raw.formato;
+    const rawPrecioNeto = raw.precioNeto;
+
     const productInput: ProductInput = {
-      nombre: (raw.nombre as string).trim(),
-      categoria: raw.categoria as ProductInput['categoria'],
-      formato: typeof raw.formato === 'string' ? raw.formato : String(raw.formato ?? ''),
-      precioNeto: typeof raw.precioNeto === 'number' ? raw.precioNeto : Number(raw.precioNeto) || 0,
+      nombre: typeof rawNombre === 'string' ? rawNombre.trim() : '',
+      categoria: rawCategoria as ProductInput['categoria'],
+      formato: typeof rawFormato === 'string' ? rawFormato : '',
+      precioNeto: typeof rawPrecioNeto === 'number' ? rawPrecioNeto : Number(rawPrecioNeto) || 0,
       disponible: raw.disponible !== false,
     };
 

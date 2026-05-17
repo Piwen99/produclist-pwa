@@ -113,9 +113,9 @@ function App() {
     try {
       const result = await importProducts(file);
       const parts: string[] = [];
-      if (result.success > 0) parts.push(`${result.success} agregados`);
-      if (result.updated > 0) parts.push(`${result.updated} actualizados`);
-      if (result.errors.length > 0) parts.push(`${result.errors.length} errores`);
+      if (result.success > 0) parts.push(`${String(result.success)} agregados`);
+      if (result.updated > 0) parts.push(`${String(result.updated)} actualizados`);
+      if (result.errors.length > 0) parts.push(`${String(result.errors.length)} errores`);
 
       setImportMessage(`Importación completada: ${parts.join(', ')}.`);
       if (result.errors.length > 0) {
@@ -223,7 +223,7 @@ function App() {
         ref={fileInputRef}
         type="file"
         accept=".json,application/json"
-        onChange={handleImportFile}
+        onChange={(e) => { void handleImportFile(e); }}
         className="hidden"
         aria-hidden="true"
       />
@@ -251,8 +251,8 @@ function App() {
         {activeView === 'products' ? (
           <ProductList
             products={products}
-            onUpdate={handleUpdateProduct}
-            onDelete={handleDeleteProduct}
+            onUpdate={(id, changes) => { void handleUpdateProduct(id, changes); }}
+            onDelete={(id) => { void handleDeleteProduct(id); }}
             onStartEdit={handleEditProduct}
           />
         ) : (
@@ -276,7 +276,7 @@ function App() {
       {/* Product Form - Create Modal */}
       {showForm && (
         <ProductForm
-          onSubmit={handleSubmitProduct}
+          onSubmit={(data) => { void handleSubmitProduct(data); }}
           onCancel={handleCloseForm}
         />
       )}
@@ -285,7 +285,7 @@ function App() {
       {editingProduct && (
         <ProductForm
           product={editingProduct}
-          onSubmit={handleSaveEdit}
+          onSubmit={(data) => { void handleSaveEdit(data); }}
           onCancel={handleCloseEdit}
         />
       )}

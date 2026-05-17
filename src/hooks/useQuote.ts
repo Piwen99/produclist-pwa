@@ -17,9 +17,10 @@ export function useQuote(): UseQuoteReturn {
   const [items, setItems] = useState<QuoteItem[]>([]);
 
   const addItem = useCallback((product: Product) => {
+    if (product.id === undefined) return;
     const newItem: QuoteItem = {
       id: crypto.randomUUID(),
-      productId: product.id!,
+      productId: product.id,
       nombre: product.nombre,
       formato: product.formato,
       cantidad: 1,

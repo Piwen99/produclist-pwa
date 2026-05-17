@@ -21,7 +21,8 @@ export function ProductRow({ product, onUpdate, onDelete, onStartEdit }: Product
 
   const handleConfirmDelete = useCallback(() => {
     setShowConfirm(false);
-    onDelete(product.id!);
+    if (product.id === undefined) return;
+    onDelete(product.id);
   }, [onDelete, product]);
 
   const handleEdit = useCallback(() => {
@@ -57,7 +58,8 @@ export function ProductRow({ product, onUpdate, onDelete, onStartEdit }: Product
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onUpdate(product.id!, { disponible: !product.disponible });
+                if (product.id === undefined) return;
+                onUpdate(product.id, { disponible: !product.disponible });
               }}
               className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium transition-colors touch-manipulation cursor-pointer ${
                 product.disponible

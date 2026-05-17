@@ -33,8 +33,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
     // Reset when any resetKey changes
     if (prevProps.resetKeys !== undefined) {
+      const prevKeys = prevProps.resetKeys;
       const changed = this.props.resetKeys.some(
-        (key, i) => key !== prevProps.resetKeys![i],
+        (key, i) => key !== prevKeys[i],
       );
       if (changed) this.resetBoundary();
     }
