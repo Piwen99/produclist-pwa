@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react';
 import type { QuoteItem, QuoteTotals } from '../types/quote';
 
 interface QuoteShareButtonProps {
@@ -19,7 +20,7 @@ function formatQuoteText(items: QuoteItem[], totals: QuoteTotals): string {
     const itemKg = parseFloat(item.formato.replace(',', '.')) * item.cantidad;
     const subtotal = itemKg * item.precioKg;
     lines.push(item.nombre);
-    lines.push(`   Formato: ${item.formato} kg | Cant: ${item.cantidad} unid | Total: ${itemKg.toFixed(1)} kg`);
+    lines.push(`   Formato: ${item.formato} kg | Cant: ${item.cantidad} unid | Total: ${itemKg.toFixed(2)} kg`);
     lines.push(`   $/kg: ${clpFormatter.format(item.precioKg)} | Subtotal: ${clpFormatter.format(subtotal)}`);
     lines.push('━━━━━━━━━━━━━━━━━━');
   }
@@ -34,11 +35,14 @@ function formatQuoteText(items: QuoteItem[], totals: QuoteTotals): string {
 export function QuoteShareButton({ items, totals }: QuoteShareButtonProps) {
   const isEmpty = items.length === 0;
   const hasShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+  const [copied, setCopied] = useState(false);
 
-  const handleCopy = async () => {
+  const handleCopy = useCallback(async () => {
     const text = formatQuoteText(items, totals);
     await navigator.clipboard.writeText(text);
-  };
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [items, totals]);
 
   const handleShare = async () => {
     const text = formatQuoteText(items, totals);
@@ -62,7 +66,16 @@ export function QuoteShareButton({ items, totals }: QuoteShareButtonProps) {
         className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors touch-manipulation"
         aria-label="Copiar cotización"
       >
-        Copiar cotización
+        {copied ? (
+          <span className="flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            ¡Copiado!
+          </span>
+        ) : (
+          'Copiar cotización'
+        )}
       </button>
       <button
         onClick={handleWhatsApp}

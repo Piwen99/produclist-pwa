@@ -22,7 +22,7 @@ const clpFormatter = new Intl.NumberFormat('es-CL', {
 });
 
 // Chilean decimal format for kg display
-const chileanFormat = (n: number) => n.toFixed(1).replace('.', ',');
+const chileanFormat = (n: number) => n.toFixed(2).replace('.', ',');
 
 export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePrecioKg, onRemove }: CotizadorProps) {
   const [showSelector, setShowSelector] = useState(false);
