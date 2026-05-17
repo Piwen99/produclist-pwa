@@ -16,9 +16,4 @@ export function useProductsByCategory(category: string): Product[] | undefined {
   );
 }
 
-export function useAvailableProducts(): Product[] | undefined {
-  return useLiveQuery(
-    () => db.products.toArray(),
-    []
-  );
-}
+
