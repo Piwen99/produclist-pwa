@@ -37,9 +37,14 @@ export function QuoteItem({ item, onUpdateQty, onUpdatePrecioKg, onRemove }: Quo
 
   const handlePrecioChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = parseInt(e.target.value, 10);
-      if (!isNaN(value)) {
-        onUpdatePrecioKg(item.id, Math.max(0, value));
+      const val = e.target.value;
+      if (val === '') {
+        onUpdatePrecioKg(item.id, 0);
+        return;
+      }
+      const num = parseInt(val, 10);
+      if (!isNaN(num)) {
+        onUpdatePrecioKg(item.id, Math.max(0, num));
       }
     },
     [item.id, onUpdatePrecioKg]
@@ -87,9 +92,10 @@ export function QuoteItem({ item, onUpdateQty, onUpdatePrecioKg, onRemove }: Quo
           <input
             type="number"
             id={precioInputId}
-            value={item.precioKg}
+            value={item.precioKg || ''}
             onChange={handlePrecioChange}
             min={0}
+            placeholder="0"
             className="w-20 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
             aria-label="Precio por kg"
           />
