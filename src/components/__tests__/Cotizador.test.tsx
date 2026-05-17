@@ -53,7 +53,7 @@ describe('Cotizador', () => {
   it('should display total kg section', () => {
     render(<Cotizador items={[]} totals={{ totalKg: 113.4, subtotal: 0, iva: 0, total: 0 }} {...mockHandlers} />);
     expect(screen.getByText(/total kg/i)).toBeInTheDocument();
-    expect(screen.getByText(/113,4 kg/i)).toBeInTheDocument();
+    expect(screen.getByText(/113,40 kg/i)).toBeInTheDocument();
   });
 
   it('should display subtotal section', () => {
