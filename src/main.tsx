@@ -1,4 +1,5 @@
 import { StrictMode } from 'react'
+import { BrowserRouter } from 'react-router-dom'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
@@ -9,11 +10,13 @@ const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Root element not found');
 createRoot(rootElement).render(
   <StrictMode>
-    <ErrorBoundary>
-      <ToastProvider>
-        <App />
-      </ToastProvider>
-    </ErrorBoundary>
+    <BrowserRouter>
+      <ErrorBoundary>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </ErrorBoundary>
+    </BrowserRouter>
   </StrictMode>,
 )
 

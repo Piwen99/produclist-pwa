@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { Routes, Route, NavLink } from 'react-router-dom';
 import { seedDatabase } from './db/seed';
 import { useProducts } from './hooks/useProducts';
 import { useAddProduct } from './hooks/useAddProduct';
@@ -22,7 +23,6 @@ function App() {
   const { remove } = useDeleteProduct();
   const { toast } = useToast();
 
-  const [activeView, setActiveView] = useState<'products' | 'cotizador'>('products');
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -144,32 +144,31 @@ function App() {
                 Produclist
               </h1>
               {/* View tabs */}
-              <div className="flex items-center ml-4 border-l border-gray-200 dark:border-gray-700 pl-4">
-                <button
-                  onClick={() => setActiveView('products')}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors touch-manipulation ${
-                    activeView === 'products'
-                      ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                  }`}
-                  role="tab"
-                  aria-selected={activeView === 'products'}
+              <nav className="flex items-center ml-4 border-l border-gray-200 dark:border-gray-700 pl-4">
+                <NavLink
+                  to="/"
+                  end
+                  className={({ isActive }) =>
+                    `px-3 py-1.5 text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                      isActive
+                        ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
                 >
                   Productos
-                </button>
-                <button
-                  onClick={() => setActiveView('cotizador')}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors touch-manipulation ml-1 ${
-                    activeView === 'cotizador'
-                      ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                  }`}
-                  role="tab"
-                  aria-selected={activeView === 'cotizador'}
+                </NavLink>
+                <NavLink
+                  to="/cotizador"
+                  className={({ isActive }) =>
+                    `px-3 py-1.5 text-sm font-medium rounded-md transition-colors touch-manipulation ml-1 ${
+                      isActive
+                        ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
                 >
                   Cotizador
-                </button>
-              </div>
+                </NavLink>
+              </nav>
             </div>
             {/* Export buttons */}
             <button
@@ -231,23 +230,26 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
-        {activeView === 'products' ? (
-          <ProductList
-            products={products}
-            onUpdate={(id, changes) => { void handleUpdateProduct(id, changes); }}
-            onDelete={(id) => { void handleDeleteProduct(id); }}
-            onStartEdit={handleEditProduct}
-          />
-        ) : (
-          <Cotizador
-            items={items}
-            totals={totals}
-            onAddProduct={addItem}
-            onUpdateQty={updateItemQty}
-            onUpdatePrecioKg={updateItemPrecioKg}
-            onRemove={removeItem}
-          />
-        )}
+        <Routes>
+          <Route index element={
+            <ProductList
+              products={products}
+              onUpdate={(id, changes) => { void handleUpdateProduct(id, changes); }}
+              onDelete={(id) => { void handleDeleteProduct(id); }}
+              onStartEdit={handleEditProduct}
+            />
+          } />
+          <Route path="cotizador" element={
+            <Cotizador
+              items={items}
+              totals={totals}
+              onAddProduct={addItem}
+              onUpdateQty={updateItemQty}
+              onUpdatePrecioKg={updateItemPrecioKg}
+              onRemove={removeItem}
+            />
+          } />
+        </Routes>
       </main>
 
       {/* Floating PDF Button */}
