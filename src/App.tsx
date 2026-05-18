@@ -12,6 +12,7 @@ import { ProductForm } from './components/ProductForm';
 import { PDFButton } from './components/PDFButton';
 import { InstallPrompt } from './components/InstallPrompt';
 import { Cotizador } from './components/Cotizador';
+import { QuoteHistory } from './components/QuoteHistory';
 import { exportToJSON, exportToCSV, importProducts } from './utils/exportImport';
 import type { Product, ProductInput } from './types/product';
 import './App.css';
@@ -167,6 +168,18 @@ function App() {
                     }`}
                 >
                   Cotizador
+<<<<<<< HEAD
+                </NavLink>
+                <NavLink
+                  to="/historial"
+                  className={({ isActive }) =>
+                    `px-3 py-1.5 text-sm font-medium rounded-md transition-colors touch-manipulation ml-1 ${
+                      isActive
+                        ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                >
+                  Historial
                 </NavLink>
               </nav>
             </div>
@@ -230,6 +243,7 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
+<<<<<<< HEAD
         <Routes>
           <Route index element={
             <ProductList
@@ -249,6 +263,7 @@ function App() {
               onRemove={removeItem}
             />
           } />
+          <Route path="historial" element={<QuoteHistory />} />
         </Routes>
       </main>
 

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { QuoteItem } from './QuoteItem';
 import { QuoteProductSelector } from './QuoteProductSelector';
 import { QuoteShareButton } from './QuoteShareButton';
+import { saveQuote } from '../db/database';
+import { useToast } from '../hooks/useToast';
 import type { QuoteItem as QuoteItemType, QuoteTotals } from '../types/quote';
 import type { Product } from '../types/product';
 
@@ -26,6 +28,26 @@ const chileanFormat = (n: number) => n.toFixed(2).replace('.', ',');
 
 export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePrecioKg, onRemove }: CotizadorProps) {
   const [showSelector, setShowSelector] = useState(false);
+  const { toast } = useToast();
+
+  const handleSave = async () => {
+    if (items.length === 0) {
+      toast.warning('Agregá productos antes de guardar');
+      return;
+    }
+    try {
+      await saveQuote({
+        items,
+        totalNeto: totals.subtotal,
+        iva: totals.iva,
+        total: totals.total,
+      });
+      toast.success('Cotización guardada ✅');
+    } catch (error) {
+      console.error('Error saving quote:', error);
+      toast.error('Error al guardar la cotización');
+    }
+  };
 
   const handleOpenSelector = () => setShowSelector(true);
   const handleCloseSelector = () => setShowSelector(false);
@@ -107,6 +129,19 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
       {/* Share button */}
       <div className="mt-4">
         <QuoteShareButton items={items} totals={totals} />
+      </div>
+
+      {/* Save button */}
+      <div className="mt-2">
+        <button
+          onClick={handleSave}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors touch-manipulation"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+          </svg>
+          Guardar cotización
+        </button>
       </div>
 
       {/* Product selector modal */}

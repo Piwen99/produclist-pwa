@@ -1,15 +1,30 @@
 import Dexie, { type Table } from 'dexie';
 import type { Product, ProductInput } from '../types/product';
+import type { QuoteItem } from '../types/quote';
 
 export class ProduclistDB extends Dexie {
   products!: Table<Product>;
+  quotes!: Table<SavedQuote>;
 
   constructor() {
     super('ProduclistDB');
     this.version(1).stores({
       products: '++id, nombre, categoria, disponible'
     });
+    this.version(2).stores({
+      products: '++id, nombre, categoria, disponible',
+      quotes: '++id, fecha'
+    });
   }
+}
+
+export interface SavedQuote {
+  id?: number;
+  fecha: Date;
+  items: QuoteItem[];
+  totalNeto: number;
+  iva: number;
+  total: number;
 }
 
 export const db = new ProduclistDB();
@@ -82,4 +97,37 @@ export async function deduplicateProducts(): Promise<number> {
   }
 
   return toDelete.length;
+}
+
+// Quote CRUD Helpers
+
+/**
+ * Save a new quote with the current date (or provided date)
+ */
+export async function saveQuote(
+  data: Omit<SavedQuote, 'id' | 'fecha'> & { fecha?: Date }
+): Promise<number> {
+  const id = await db.quotes.add({
+    fecha: data.fecha ?? new Date(),
+    items: data.items,
+    totalNeto: data.totalNeto,
+    iva: data.iva,
+    total: data.total,
+  }) as number;
+  return id;
+}
+
+/**
+ * Get all quotes ordered by fecha descending (newest first)
+ */
+export async function getAllQuotes(): Promise<SavedQuote[]> {
+  const quotes = await db.quotes.orderBy('fecha').toArray();
+  return quotes.reverse();
+}
+
+/**
+ * Delete a quote by id
+ */
+export async function deleteQuote(id: number): Promise<void> {
+  await db.quotes.delete(id);
 }
