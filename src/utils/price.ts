@@ -36,3 +36,18 @@ export function calcTotal(formato: string, precioBruto: number): number {
   if (isNaN(parsed)) return 0;
   return Math.round(parsed * precioBruto);
 }
+
+/**
+ * Format a number as Chilean CLP currency
+ * Uses Intl.NumberFormat with es-CL locale
+ * @param amount - Number to format
+ * @returns Formatted string like "$247.615"
+ */
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('es-CL', {
+    style: 'currency',
+    currency: 'CLP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
