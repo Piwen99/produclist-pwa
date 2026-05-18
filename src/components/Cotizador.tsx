@@ -161,7 +161,7 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <QuoteProductSelector onSelect={handleSelectProduct} />
+              <QuoteProductSelector onSelect={handleSelectProduct} onClose={handleCloseSelector} />
             </div>
           </div>
         </div>

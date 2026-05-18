@@ -21,10 +21,11 @@ const allProducts: Product[] = [
 const availableProducts = allProducts.filter(p => p.disponible);
 
 const mockOnSelect = vi.fn();
+const mockOnClose = vi.fn();
 
 function setup(mockData: Product[] | undefined = availableProducts) {
   (useLiveQuery as ReturnType<typeof vi.fn>).mockReturnValue(mockData);
-  return render(<QuoteProductSelector onSelect={mockOnSelect} />);
+  return render(<QuoteProductSelector onSelect={mockOnSelect} onClose={mockOnClose} />);
 }
 
 beforeEach(() => {

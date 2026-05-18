@@ -1,14 +1,29 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
+import { formatCurrency } from '../utils/price';
 import type { Product } from '../types/product';
 
 interface QuoteProductSelectorProps {
   onSelect: (product: Product) => void;
+  onClose: () => void;
 }
 
-export function QuoteProductSelector({ onSelect }: QuoteProductSelectorProps) {
+export function QuoteProductSelector({ onSelect, onClose }: QuoteProductSelectorProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
 
   const products = useLiveQuery(
     () => db.products.toArray(),
@@ -59,6 +74,7 @@ export function QuoteProductSelector({ onSelect }: QuoteProductSelectorProps) {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
         <input
+          ref={inputRef}
           type="text"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -104,15 +120,20 @@ export function QuoteProductSelector({ onSelect }: QuoteProductSelectorProps) {
                   {product.formato} kg
                 </span>
               </div>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-5 w-5 text-gray-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-orange-600 dark:text-orange-400 whitespace-nowrap">
+                  {formatCurrency(product.precioNeto)}
+                </span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5 text-gray-400 shrink-0"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </div>
             </button>
           ))}
         </div>
