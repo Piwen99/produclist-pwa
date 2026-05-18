@@ -26,10 +26,25 @@ function App() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Cotizador state
   const { items, addItem, removeItem, updateItemQty, updateItemPrecioKg, totals } = useQuote();
+
+  // Close mobile menu on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
+        setShowMobileMenu(false);
+      }
+    };
+    if (showMobileMenu) {
+      document.addEventListener('mousedown', handleClick);
+    }
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showMobileMenu]);
 
   // Seed database on mount
   useEffect(() => {
@@ -139,18 +154,61 @@ function App() {
       <header className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6">
           <div className="flex items-center justify-between h-14 sm:h-16">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <span className="text-xl sm:text-2xl">🥜</span>
-              <h1 className="text-base sm:text-lg font-bold text-gray-900 dark:text-white truncate">
-                Produclist
-              </h1>
+            <div className="flex items-center gap-1 sm:gap-2">
+              {/* Hamburger menu for export/import */}
+              <div className="relative" ref={mobileMenuRef}>
+                <button
+                  onClick={() => setShowMobileMenu(v => !v)}
+                  className="p-2 text-gray-500 hover:text-orange-500 transition-colors touch-manipulation"
+                  aria-label="Menú de opciones"
+                  aria-expanded={showMobileMenu}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                </button>
+                {showMobileMenu && (
+                  <div className="absolute left-0 top-full mt-1 w-44 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                    <button
+                      onClick={() => { handleExportJSON(); setShowMobileMenu(false); }}
+                      disabled={!hasProducts}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Exportar JSON
+                    </button>
+                    <button
+                      onClick={() => { handleExportCSV(); setShowMobileMenu(false); }}
+                      disabled={!hasProducts}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Exportar CSV
+                    </button>
+                    <button
+                      onClick={() => { handleImportClick(); setShowMobileMenu(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      Importar
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* View tabs */}
-              <nav className="flex items-center ml-4 border-l border-gray-200 dark:border-gray-700 pl-4">
+              <nav className="flex items-center">
                 <NavLink
                   to="/"
                   end
                   className={({ isActive }) =>
-                    `px-3 py-1.5 text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                    `px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -161,7 +219,7 @@ function App() {
                 <NavLink
                   to="/cotizador"
                   className={({ isActive }) =>
-                    `px-3 py-1.5 text-sm font-medium rounded-md transition-colors touch-manipulation ml-1 ${
+                    `px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -172,7 +230,7 @@ function App() {
                 <NavLink
                   to="/historial"
                   className={({ isActive }) =>
-                    `px-3 py-1.5 text-sm font-medium rounded-md transition-colors touch-manipulation ml-1 ${
+                    `px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -182,40 +240,6 @@ function App() {
                 </NavLink>
               </nav>
             </div>
-            {/* Export buttons */}
-            <button
-              onClick={handleExportJSON}
-              disabled={!hasProducts}
-              title="Exportar JSON"
-              className="p-2 text-gray-500 hover:text-orange-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-manipulation"
-              aria-label="Exportar productos como JSON"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            </button>
-            <button
-              onClick={handleExportCSV}
-              disabled={!hasProducts}
-              title="Exportar CSV"
-              className="p-2 text-gray-500 hover:text-orange-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors touch-manipulation"
-              aria-label="Exportar productos como CSV"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </button>
-            {/* Import button */}
-            <button
-              onClick={handleImportClick}
-              title="Importar productos"
-              className="p-2 text-gray-500 hover:text-orange-500 transition-colors touch-manipulation"
-              aria-label="Importar productos desde archivo"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-              </svg>
-            </button>
             <button
               onClick={handleAddNew}
               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors touch-manipulation"

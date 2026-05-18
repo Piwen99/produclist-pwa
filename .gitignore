@@ -26,3 +26,7 @@ dist-ssr
 
 # Reference files
 referencia/
+
+# Playwright
+test-results/
+e2e/screenshots/
