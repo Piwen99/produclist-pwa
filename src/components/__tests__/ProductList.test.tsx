@@ -29,6 +29,16 @@ function renderList(products?: Product[] | undefined) {
   );
 }
 
+/** Expand all category groups so product rows become visible */
+async function expandAllCategories(user: ReturnType<typeof userEvent.setup>) {
+  for (const name of ['Frutos Secos', 'Semillas/Cereal', 'Fruta Deshidratada', 'Legumbres']) {
+    const btn = screen.getByRole('button', { name: new RegExp(name, 'i') });
+    if (btn.getAttribute('aria-expanded') === 'false') {
+      await user.click(btn);
+    }
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -50,7 +60,8 @@ describe('ProductList — empty state', () => {
 });
 
 describe('ProductList — renders products', () => {
-  it('renders all products grouped by category', () => {
+  it('renders all products grouped by category', async () => {
+    const user = userEvent.setup();
     renderList(mockProducts);
 
     // Category headers
@@ -59,7 +70,8 @@ describe('ProductList — renders products', () => {
     expect(screen.getByText('Legumbres')).toBeInTheDocument();
     expect(screen.getByText('Fruta Deshidratada')).toBeInTheDocument();
 
-    // Product names
+    // Product names — expand categories first
+    await expandAllCategories(user);
     expect(screen.getByText('Chía')).toBeInTheDocument();
     expect(screen.getByText('Almendras')).toBeInTheDocument();
     expect(screen.getByText('Arroz')).toBeInTheDocument();
@@ -78,6 +90,7 @@ describe('ProductList — search filter', () => {
   it('filters products by name (case-insensitive)', async () => {
     const user = userEvent.setup();
     renderList(mockProducts);
+    await expandAllCategories(user);
 
     await user.type(screen.getByLabelText('Buscar productos por nombre'), 'chía');
 
@@ -91,6 +104,7 @@ describe('ProductList — search filter', () => {
   it('shows partial match results', async () => {
     const user = userEvent.setup();
     renderList(mockProducts);
+    await expandAllCategories(user);
 
     await user.type(screen.getByLabelText('Buscar productos por nombre'), 'al');
 
@@ -118,11 +132,15 @@ describe('ProductList — search filter', () => {
   it('clears search when clicking the X button', async () => {
     const user = userEvent.setup();
     renderList(mockProducts);
+    await expandAllCategories(user);
 
     await user.type(screen.getByLabelText('Buscar productos por nombre'), 'chía');
     expect(screen.queryByText('Almendras')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Limpiar búsqueda' }));
+    // Categories that were filtered out unmount and remount collapsed on clear
+    // Expand them again to verify products are back
+    await expandAllCategories(user);
     expect(screen.getByText('Almendras')).toBeInTheDocument();
     expect(screen.getByText('Chía')).toBeInTheDocument();
   });
@@ -130,6 +148,7 @@ describe('ProductList — search filter', () => {
   it('shows empty search result state when no match', async () => {
     const user = userEvent.setup();
     renderList(mockProducts);
+    await expandAllCategories(user);
 
     await user.type(screen.getByLabelText('Buscar productos por nombre'), 'xyzzy');
 
@@ -143,6 +162,7 @@ describe('ProductList — availability filter', () => {
   it('shows only available products when toggle is on', async () => {
     const user = userEvent.setup();
     renderList(mockProducts);
+    await expandAllCategories(user);
 
     await user.click(screen.getByRole('checkbox', { name: 'Filtrar solo productos disponibles' }));
 
@@ -159,6 +179,7 @@ describe('ProductList — availability filter', () => {
   it('shows "mostrar todos" button when available-only yields all unavailable', async () => {
     const user = userEvent.setup();
     renderList(mockProducts);
+    await expandAllCategories(user);
 
     // Search for something that's not available
     await user.type(screen.getByLabelText('Buscar productos por nombre'), 'almendras');
@@ -171,6 +192,7 @@ describe('ProductList — availability filter', () => {
   it('shows empty state when no available products and toggle is on with all unavailable', async () => {
     const user = userEvent.setup();
     renderList(mockProducts);
+    await expandAllCategories(user);
 
     // Search for something that exists but is not available
     await user.type(screen.getByLabelText('Buscar productos por nombre'), 'almendras');
@@ -183,6 +205,7 @@ describe('ProductList — availability filter', () => {
   it('toggles available filter and search together', async () => {
     const user = userEvent.setup();
     renderList(mockProducts);
+    await expandAllCategories(user);
 
     // Filter by available only
     await user.click(screen.getByRole('checkbox', { name: 'Filtrar solo productos disponibles' }));

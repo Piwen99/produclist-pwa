@@ -25,7 +25,7 @@ const CATEGORY_COLORS: Record<Category, string> = {
 };
 
 export function CategoryGroup({ category, products, onUpdate, onDelete, onStartEdit }: CategoryGroupProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const handleToggle = useCallback(() => {
     setIsExpanded(prev => !prev);

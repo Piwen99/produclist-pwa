@@ -20,6 +20,16 @@ test.describe('Responsive visual tests', () => {
     expect(hasOverflow).toBe(false);
   });
 
+  test('categories must start collapsed', async ({ page }) => {
+    // Category headers should be visible
+    await expect(page.getByText('Frutos Secos')).toBeVisible();
+    await expect(page.getByText('Legumbres')).toBeVisible();
+
+    // But product rows should NOT be visible initially (collapsed)
+    const productRow = page.locator('.product-row').first();
+    await expect(productRow).not.toBeVisible();
+  });
+
   test('1. Product list screen', async ({ page }) => {
     await page.waitForTimeout(500);
     await page.screenshot({
