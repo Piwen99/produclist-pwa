@@ -304,7 +304,7 @@ interface ProductPDFDocumentProps {
 
 export function ProductPDFDocument({ products: propProducts }: ProductPDFDocumentProps) {
   const liveProducts = useLiveQuery(() => db.products.toArray(), []);
-  const products = propProducts ?? liveProducts ?? [];
+  const products = (propProducts ?? liveProducts ?? []).filter(p => p.disponible);
 
   const today = new Date();
   const grouped = groupByCategory(products);
