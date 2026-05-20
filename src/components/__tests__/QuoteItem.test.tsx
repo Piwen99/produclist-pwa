@@ -70,12 +70,11 @@ describe('QuoteItem', () => {
     expect(handlers.onRemove).toHaveBeenCalledWith('test-id-123');
   });
 
-  it('should enforce minimum cantidad of 1', () => {
+  it('should allow cantidad of 0', () => {
     render(<QuoteItem item={mockItem} {...handlers} />);
     const input = screen.getByLabelText('Cantidad');
     fireEvent.change(input, { target: { value: '0' } });
-    // When quantity becomes 0, it should be reset to 1
-    expect(handlers.onUpdateQty).toHaveBeenCalledWith('test-id-123', 1);
+    expect(handlers.onUpdateQty).toHaveBeenCalledWith('test-id-123', 0);
   });
 
   it('should display zero subtotal when precioKg is 0', () => {

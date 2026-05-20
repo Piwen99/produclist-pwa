@@ -23,7 +23,7 @@ export function useQuote(): UseQuoteReturn {
       productId: product.id,
       nombre: product.nombre,
       formato: product.formato,
-      cantidad: 1,
+      cantidad: 0,
       precioKg: 0,
     };
     setItems(prev => [...prev, newItem]);
@@ -36,7 +36,7 @@ export function useQuote(): UseQuoteReturn {
   const updateItemQty = useCallback((id: string, cantidad: number) => {
     setItems(prev =>
       prev.map(item =>
-        item.id === id ? { ...item, cantidad: Math.max(1, cantidad) } : item
+        item.id === id ? { ...item, cantidad: Math.max(0, cantidad) } : item
       )
     );
   }, []);

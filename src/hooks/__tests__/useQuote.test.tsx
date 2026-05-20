@@ -33,7 +33,7 @@ describe('useQuote', () => {
   });
 
   describe('addItem', () => {
-    it('should add a product with cantidad=1 and precioKg=0', () => {
+    it('should add a product with cantidad=0 and precioKg=0', () => {
       const { result } = renderHook(() => useQuote());
       const mockProduct = createMockProduct({ id: 1, nombre: 'Chía', formato: '1,5' });
 
@@ -46,7 +46,7 @@ describe('useQuote', () => {
         productId: 1,
         nombre: 'Chía',
         formato: '1,5',
-        cantidad: 1,
+        cantidad: 0,
         precioKg: 0,
       });
       expect(result.current.items[0].id).toBeDefined();

@@ -27,9 +27,14 @@ export function QuoteItem({ item, onUpdateQty, onUpdatePrecioKg, onRemove }: Quo
 
   const handleQtyChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = parseInt(e.target.value, 10);
-      if (!isNaN(value)) {
-        onUpdateQty(item.id, Math.max(1, value));
+      const val = e.target.value;
+      if (val === '') {
+        onUpdateQty(item.id, 0);
+        return;
+      }
+      const num = parseInt(val, 10);
+      if (!isNaN(num)) {
+        onUpdateQty(item.id, num);
       }
     },
     [item.id, onUpdateQty]
@@ -76,9 +81,10 @@ export function QuoteItem({ item, onUpdateQty, onUpdatePrecioKg, onRemove }: Quo
           <input
             type="number"
             id={qtyInputId}
-            value={item.cantidad}
+            value={item.cantidad || ''}
             onChange={handleQtyChange}
-            min={1}
+            min={0}
+            step={1}
             className="w-16 px-2 py-1 text-sm text-center border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
             aria-label="Cantidad"
           />
