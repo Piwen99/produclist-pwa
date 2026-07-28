@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcPrecioBruto, calcTotal } from '../price';
+import { calcPrecioBruto, calcTotal, isValidChileanFormat } from '../price';
 
 describe('calcPrecioBruto', () => {
   it('should calculate gross price with 19% VAT', () => {
@@ -47,5 +47,26 @@ describe('calcTotal', () => {
   it('should handle invalid formato gracefully', () => {
     expect(calcTotal('abc', 1000)).toBe(0);
     expect(calcTotal('', 1000)).toBe(0);
+  });
+});
+
+describe('isValidChileanFormat', () => {
+  it('accepts valid Chilean decimal like "11,34"', () => {
+    expect(isValidChileanFormat('11,34')).toBe(true);
+  });
+  it('accepts whole number like "5"', () => {
+    expect(isValidChileanFormat('5')).toBe(true);
+  });
+  it('rejects empty string', () => {
+    expect(isValidChileanFormat('')).toBe(false);
+  });
+  it('rejects letters like "abc"', () => {
+    expect(isValidChileanFormat('abc')).toBe(false);
+  });
+  it('rejects comma-only like ",5"', () => {
+    expect(isValidChileanFormat(',5')).toBe(false);
+  });
+  it('rejects trailing comma like "11,"', () => {
+    expect(isValidChileanFormat('11,')).toBe(false);
   });
 });
