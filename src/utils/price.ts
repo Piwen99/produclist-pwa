@@ -14,6 +14,16 @@ export function parseChileanNumber(formato: string): number {
 export const parseFormato = parseChileanNumber;
 
 /**
+ * Validate that a string is in Chilean decimal format
+ * Accepts whole numbers (e.g., "5") or decimal with comma (e.g., "11,34")
+ * Rejects empty strings, letters, comma-only, and trailing comma
+ */
+export function isValidChileanFormat(formato: string): boolean {
+  if (!formato) return false;
+  return /^\d+(,\d+)?$/.test(formato);
+}
+
+/**
  * Calculate gross price (precio bruto) from net price (precio neto)
  * Applies 19% VAT/IVA (Chile)
  * @param precioNeto - Net price

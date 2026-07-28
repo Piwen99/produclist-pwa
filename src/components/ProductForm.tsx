@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { Product, ProductInput, Category } from '../types/product';
-import { calcPrecioBruto } from '../utils/price';
+import { calcPrecioBruto, isValidChileanFormat } from '../utils/price';
 
 interface ProductFormProps {
   product?: Product;
@@ -37,6 +37,10 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
 
     if (formData.precioNeto < 0) {
       newErrors.precioNeto = 'El precio no puede ser negativo';
+    }
+
+    if (formData.formato && !isValidChileanFormat(formData.formato)) {
+      newErrors.formato = 'Formato inválido. Use formato chileno (ej: 11,34)';
     }
 
     setErrors(newErrors);
@@ -127,9 +131,14 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
                 id="formato"
                 value={formData.formato}
                 onChange={(e) => updateField('formato', e.target.value)}
-                className="w-full px-3 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 dark:bg-gray-700 dark:text-white touch-manipulation"
+                className={`w-full px-3 py-3 text-base border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 dark:bg-gray-700 dark:text-white touch-manipulation ${
+                  errors.formato ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                }`}
                 placeholder="Ej: 11,34"
               />
+              {errors.formato && (
+                <p className="mt-1 text-xs text-red-500">{errors.formato}</p>
+              )}
             </div>
 
             {/* Precio Neto */}

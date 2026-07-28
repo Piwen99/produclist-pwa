@@ -108,6 +108,36 @@ describe('ProductForm — create mode', () => {
       disponible: true,
     });
   });
+
+  it('shows validation error for invalid formato on submit', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm();
+
+    await user.type(screen.getByLabelText(/nombre/i), 'Test');
+    await user.selectOptions(screen.getByLabelText(/categoría/i), 'Legumbres');
+    await user.type(screen.getByLabelText(/formato/i), 'abc');
+    const precioInput = screen.getByLabelText(/precio neto/i);
+    await user.clear(precioInput);
+    await user.type(precioInput, '5000');
+    await user.click(screen.getByRole('button', { name: 'Crear Producto' }));
+
+    expect(screen.getByText('Formato inválido. Use formato chileno (ej: 11,34)')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('does not validate formato when campo formato is empty', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm();
+
+    await user.type(screen.getByLabelText(/nombre/i), 'Test');
+    await user.selectOptions(screen.getByLabelText(/categoría/i), 'Legumbres');
+    const precioInput = screen.getByLabelText(/precio neto/i);
+    await user.clear(precioInput);
+    await user.type(precioInput, '5000');
+    await user.click(screen.getByRole('button', { name: 'Crear Producto' }));
+
+    expect(onSubmit).toHaveBeenCalled();
+  });
 });
 
 describe('ProductForm — edit mode', () => {

@@ -9,11 +9,4 @@ export function useProducts(): Product[] | undefined {
   );
 }
 
-export function useProductsByCategory(category: string): Product[] | undefined {
-  return useLiveQuery(
-    () => db.products.where('categoria').equals(category).toArray(),
-    [category]
-  );
-}
-
 
