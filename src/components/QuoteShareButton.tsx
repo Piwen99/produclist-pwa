@@ -14,20 +14,24 @@ const clpFormatter = new Intl.NumberFormat('es-CL', {
 });
 
 function formatQuoteText(items: QuoteItem[], totals: QuoteTotals): string {
-  const lines: string[] = ['COTIZACIÓN', '━━━━━━━━━━━━━━━━━━'];
+  if (items.length === 0) return 'Sin productos';
+
+  const lines: string[] = [];
+  lines.push('📋 COTIZACIÓN');
+  lines.push('────────────────────');
 
   for (const item of items) {
     const itemKg = parseFloat(item.formato.replace(',', '.')) * item.cantidad;
     const subtotal = itemKg * item.precioKg;
     lines.push(item.nombre);
-    lines.push(`   Formato: ${item.formato} kg | Cant: ${String(item.cantidad)} unid | Total: ${itemKg.toFixed(2)} kg`);
-    lines.push(`   $/kg: ${clpFormatter.format(item.precioKg)} | Subtotal: ${clpFormatter.format(subtotal)}`);
-    lines.push('━━━━━━━━━━━━━━━━━━');
+    lines.push(`  ${item.formato} kg × ${String(item.cantidad)}  →  ${clpFormatter.format(subtotal)}`);
+    lines.push('');
   }
 
-  lines.push(`Subtotal Neto: ${clpFormatter.format(totals.subtotal)}`);
-  lines.push(`IVA 19%:       ${clpFormatter.format(totals.iva)}`);
-  lines.push(`TOTAL:         ${clpFormatter.format(totals.total)}`);
+  lines.push('────────────────────');
+  lines.push(`Subtotal Neto    ${clpFormatter.format(totals.subtotal)}`);
+  lines.push(`IVA 19%         ${clpFormatter.format(totals.iva)}`);
+  lines.push(`TOTAL           ${clpFormatter.format(totals.total)}`);
 
   return lines.join('\n');
 }
