@@ -24,7 +24,7 @@ function formatQuoteText(items: QuoteItem[], totals: QuoteTotals): string {
     const itemKg = parseFloat(item.formato.replace(',', '.')) * item.cantidad;
     const subtotal = itemKg * item.precioKg;
     lines.push(item.nombre);
-    lines.push(`  ${item.formato} kg × ${String(item.cantidad)}  →  ${clpFormatter.format(subtotal)}`);
+    lines.push(`  ${item.formato} kg × ${String(item.cantidad)} @ ${clpFormatter.format(item.precioKg)}/kg  →  ${clpFormatter.format(subtotal)}`);
     lines.push('');
   }
 
