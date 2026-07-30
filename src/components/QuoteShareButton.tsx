@@ -14,20 +14,90 @@ const clpFormatter = new Intl.NumberFormat('es-CL', {
 });
 
 function formatQuoteText(items: QuoteItem[], totals: QuoteTotals): string {
-  const lines: string[] = ['COTIZACIÓN', '━━━━━━━━━━━━━━━━━━'];
+  if (items.length === 0) return 'Sin productos';
 
+  // Calculate column widths dynamically from actual data
+  const nameCol = Math.max(
+    ...items.map(i => i.nombre.length),
+    'Producto'.length
+  );
+  const fmtCol = Math.max(
+    ...items.map(i => `${i.formato} kg`.length),
+    'Formato'.length
+  );
+  const cantCol = Math.max(
+    ...items.map(i => String(i.cantidad).length),
+    'Cant'.length
+  );
+  const kgCol = Math.max(
+    ...items.map(i => {
+      const kg = parseFloat(i.formato.replace(',', '.')) * i.cantidad;
+      return `${kg.toFixed(2)} kg`.length;
+    }),
+    'Total kg'.length
+  );
+  const priceCol = Math.max(
+    ...items.map(i => clpFormatter.format(i.precioKg).length),
+    '$/kg'.length
+  );
+  const subCol = Math.max(
+    ...items.map(i => {
+      const kg = parseFloat(i.formato.replace(',', '.')) * i.cantidad;
+      return clpFormatter.format(kg * i.precioKg).length;
+    }),
+    'Subtotal'.length
+  );
+
+  // 2-char gap between columns
+  const gap = '  ';
+  const separator = '─'.repeat(
+    nameCol + gap.length + fmtCol + gap.length + cantCol + gap.length +
+    kgCol + gap.length + priceCol + gap.length + subCol
+  );
+
+  const lines: string[] = [];
+
+  // Header
+  lines.push('📋 COTIZACIÓN');
+  lines.push(separator);
+  lines.push([
+    'Producto'.padEnd(nameCol),
+    'Formato'.padStart(fmtCol),
+    'Cant'.padStart(cantCol),
+    'Total kg'.padStart(kgCol),
+    '$ / kg'.padStart(priceCol),
+    'Subtotal'.padStart(subCol),
+  ].join(gap));
+  lines.push(separator);
+
+  // Items — one row per product
   for (const item of items) {
     const itemKg = parseFloat(item.formato.replace(',', '.')) * item.cantidad;
     const subtotal = itemKg * item.precioKg;
-    lines.push(item.nombre);
-    lines.push(`   Formato: ${item.formato} kg | Cant: ${String(item.cantidad)} unid | Total: ${itemKg.toFixed(2)} kg`);
-    lines.push(`   $/kg: ${clpFormatter.format(item.precioKg)} | Subtotal: ${clpFormatter.format(subtotal)}`);
-    lines.push('━━━━━━━━━━━━━━━━━━');
+    lines.push([
+      item.nombre.padEnd(nameCol),
+      `${item.formato} kg`.padStart(fmtCol),
+      String(item.cantidad).padStart(cantCol),
+      `${itemKg.toFixed(2)} kg`.padStart(kgCol),
+      clpFormatter.format(item.precioKg).padStart(priceCol),
+      clpFormatter.format(subtotal).padStart(subCol),
+    ].join(gap));
   }
 
-  lines.push(`Subtotal Neto: ${clpFormatter.format(totals.subtotal)}`);
-  lines.push(`IVA 19%:       ${clpFormatter.format(totals.iva)}`);
-  lines.push(`TOTAL:         ${clpFormatter.format(totals.total)}`);
+  // Totals — right-aligned below the table
+  lines.push(separator);
+  const tableWidth = separator.length;
+
+  /*** @note The table separator character '─' (U+2500) is exactly 1 column wide in
+   *  monospace fonts — same as regular ASCII characters. So `.length` calculations
+   *  for alignment are accurate within the table. ***/
+
+  const padTotal = (label: string, value: string): string =>
+    `  ${label} ${value.padStart(tableWidth - 2 - label.length)}`;
+
+  lines.push(padTotal('Subtotal Neto:', clpFormatter.format(totals.subtotal)));
+  lines.push(padTotal('IVA 19%:',      clpFormatter.format(totals.iva)));
+  lines.push(padTotal('TOTAL:',        clpFormatter.format(totals.total)));
 
   return lines.join('\n');
 }
