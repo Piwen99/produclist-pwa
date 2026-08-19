@@ -1,5 +1,13 @@
 import { addProduct, db } from '../db/database';
-import type { Product, ProductInput } from '../types/product';
+import type { Product, ProductInput, Category } from '../types/product';
+import { isValidChileanFormat } from './price';
+
+const CATEGORY_VALUES: Category[] = [
+  'Frutos Secos',
+  'Semillas/Cereal',
+  'Fruta Deshidratada',
+  'Legumbres',
+];
 
 /**
  * Download a blob as a file in the browser.
@@ -15,32 +23,14 @@ function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-/**
- * Export all products as a JSON file.
+/* Export all products as a JSON file.
+ *
+ * CSV export was removed — not used and unnecessarily double-quoted names.
  */
 export function exportToJSON(products: Product[]): void {
   const json = JSON.stringify(products, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   downloadBlob(blob, 'produclist-productos.json');
-}
-
-/**
- * Export all products as a CSV file (compatible with Excel).
- * Columns: nombre, categoria, formato, precioNeto, disponible
- */
-export function exportToCSV(products: Product[]): void {
-  const headers = ['nombre', 'categoria', 'formato', 'precioNeto', 'disponible'];
-  const rows = products.map(p => [
-    `"${p.nombre}"`,
-    `"${p.categoria}"`,
-    `"${p.formato}"`,
-    p.precioNeto,
-    p.disponible ? 'SI' : 'NO',
-  ].join(','));
-
-  const csv = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  downloadBlob(blob, 'produclist-productos.csv');
 }
 
 /**
@@ -95,10 +85,33 @@ export async function importProducts(file: File): Promise<ImportResult> {
     const rawFormato = raw.formato;
     const rawPrecioNeto = raw.precioNeto;
 
+    const nombre = typeof rawNombre === 'string' ? rawNombre.trim() : '';
+    const categoria = rawCategoria as string;
+    const formato = typeof rawFormato === 'string' ? rawFormato : '';
+
+    // Categoria must belong to the known set — otherwise the product is
+    // persisted but never rendered (lists only iterate known categories).
+    if (!CATEGORY_VALUES.includes(categoria as Category)) {
+      result.errors.push({
+        nombre,
+        error: `Categoría inválida "${categoria}". Debe ser una de: ${CATEGORY_VALUES.join(', ')}.`,
+      });
+      continue;
+    }
+
+    // Formato must be a valid Chilean number when provided (empty is ok).
+    if (formato && !isValidChileanFormat(formato)) {
+      result.errors.push({
+        nombre,
+        error: `Formato inválido "${formato}". Use formato chileno (ej: 11,34).`,
+      });
+      continue;
+    }
+
     const productInput: ProductInput = {
-      nombre: typeof rawNombre === 'string' ? rawNombre.trim() : '',
-      categoria: rawCategoria as ProductInput['categoria'],
-      formato: typeof rawFormato === 'string' ? rawFormato : '',
+      nombre,
+      categoria: categoria as ProductInput['categoria'],
+      formato,
       precioNeto: typeof rawPrecioNeto === 'number' ? rawPrecioNeto : Number(rawPrecioNeto) || 0,
       disponible: raw.disponible !== false,
     };
