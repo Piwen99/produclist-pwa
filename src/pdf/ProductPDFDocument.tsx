@@ -113,6 +113,10 @@ const styles = StyleSheet.create({
   // ── Data rows ──
   dataRow: {
     flexDirection: 'row',
+    // minHeight prevents react-pdf from splitting a row across pages (a row
+    // that doesn't fully fit is pushed whole to the next page instead of
+    // leaving the product name on one page and its price columns on the next).
+    minHeight: 20,
     borderLeftWidth: 0.5,
     borderLeftColor: '#d5d9c5',
     borderRightWidth: 0.5,
