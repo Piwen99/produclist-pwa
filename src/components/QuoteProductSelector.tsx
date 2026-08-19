@@ -33,6 +33,7 @@ export function QuoteProductSelector({ onSelect, onClose }: QuoteProductSelector
   const filteredProducts = useMemo(() => {
     if (!products) return [];
 
+    // All products are quotable — available or not.
     const term = searchTerm.trim().toLowerCase();
     if (!term) return products;
 
