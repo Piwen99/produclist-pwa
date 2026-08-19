@@ -17,13 +17,12 @@ const allProducts: Product[] = [
   { id: 4, nombre: 'Pasas', categoria: 'Fruta Deshidratada', formato: '0,5', precioNeto: 2500, disponible: true },
 ];
 
-// Available products only (as Dexie query would return)
-const availableProducts = allProducts.filter(p => p.disponible);
-
+// Mock returns ALL products (available + unavailable), as the real Dexie
+// query would — the component itself must filter by `disponible`.
 const mockOnSelect = vi.fn();
 const mockOnClose = vi.fn();
 
-function setup(mockData: Product[] | undefined = availableProducts) {
+function setup(mockData: Product[] | undefined = allProducts) {
   (useLiveQuery as ReturnType<typeof vi.fn>).mockReturnValue(mockData);
   return render(<QuoteProductSelector onSelect={mockOnSelect} onClose={mockOnClose} />);
 }
@@ -45,10 +44,11 @@ describe('QuoteProductSelector', () => {
     expect(screen.getByText('Pasas')).toBeInTheDocument();
   });
 
-  it('should NOT display unavailable products', () => {
+  it('should display unavailable products too (all products are quotable)', () => {
     setup();
-    // Maní is not available, so it shouldn't appear
-    expect(screen.queryByText('Maní')).not.toBeInTheDocument();
+    // Maní is marked unavailable, but the user deliberately wants to be able
+    // to quote every product regardless of `disponible`.
+    expect(screen.getByText('Maní')).toBeInTheDocument();
   });
 
   it('should display product formato next to name', () => {

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { QuoteItem, QuoteTotals } from '../types/quote';
 
 interface QuoteShareButtonProps {
@@ -40,20 +40,42 @@ export function QuoteShareButton({ items, totals }: QuoteShareButtonProps) {
   const isEmpty = items.length === 0;
   const hasShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
   const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear the "Copiado!" timer if the component unmounts early.
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    };
+  }, []);
 
   const handleCopy = useCallback(async () => {
     const text = formatQuoteText(items, totals);
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setError(null);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError('No se pudo copiar la cotización. Probá copiarla manualmente.');
+    }
   }, [items, totals]);
 
   const handleShare = async () => {
     const text = formatQuoteText(items, totals);
-    await navigator.share({
-      title: 'Cotización',
-      text,
-    });
+    try {
+      await navigator.share({
+        title: 'Cotización',
+        text,
+      });
+      setError(null);
+    } catch (err) {
+      // User dismissing the native share sheet is not a failure.
+      if (err instanceof Error && err.name === 'AbortError') return;
+      setError('No se pudo compartir la cotización.');
+    }
   };
 
   const handleWhatsApp = () => {
@@ -98,6 +120,11 @@ export function QuoteShareButton({ items, totals }: QuoteShareButtonProps) {
         >
           Compartir
         </button>
+      )}
+      {error && (
+        <p className="text-xs text-red-600 dark:text-red-400 mt-1" role="alert">
+          {error}
+        </p>
       )}
     </div>
   );
