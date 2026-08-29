@@ -5,9 +5,22 @@
  * @returns Parsed number, or 0 if invalid
  */
 export function parseChileanNumber(formato: string): number {
-  if (!formato) return 0;
-  const parsed = parseFloat(formato.replace(',', '.'));
-  return isNaN(parsed) ? 0 : parsed;
+  return tryParseChileanNumber(formato) ?? 0;
+}
+
+/**
+ * Parse Chilean decimal format string to number, distinguishing invalid input.
+ * @param formato - Chilean decimal string (e.g., "11,34")
+ * @returns Parsed number, or null if the input is not a valid Chilean number.
+ *   Fix 24-ago-2026: callers that need to tell "0 real" from "invalid" (e.g.
+ *   quote totals) use this instead of parseChileanNumber's silent 0.
+ */
+export function tryParseChileanNumber(formato: string): number | null {
+  if (!formato) return null;
+  const trimmed = formato.trim();
+  if (!isValidChileanFormat(trimmed)) return null;
+  const parsed = parseFloat(trimmed.replace(',', '.'));
+  return isNaN(parsed) ? null : parsed;
 }
 
 /** Alias for parseChileanNumber — used in quote calculations */

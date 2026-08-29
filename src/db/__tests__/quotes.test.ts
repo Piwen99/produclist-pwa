@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db } from '../database';
-import { saveQuote, getAllQuotes, deleteQuote } from '../database';
+import { saveQuote, getAllQuotes, deleteQuote, saveQuoteDraft, loadQuoteDraft, clearQuoteDraft } from '../database';
 import type { QuoteItem } from '../../types/quote';
 
 describe('quotes database', () => {
@@ -93,6 +93,47 @@ describe('quotes database', () => {
       const remaining = await getAllQuotes();
       expect(remaining).toHaveLength(1);
       expect(remaining[0].id).toBe(id2);
+    });
+  });
+
+  describe('quote draft (autosave)', () => {
+    beforeEach(async () => {
+      await db.drafts.clear();
+    });
+
+    it('saves and loads a draft with items and totals', async () => {
+      const items: QuoteItem[] = [
+        { id: 'item-1', productId: 1, nombre: 'ALMENDRA LAMINADA', formato: '11,34', cantidad: 2, precioKg: 9200 },
+      ];
+
+      await saveQuoteDraft({ items, totalNeto: 208416, iva: 39599, total: 247615 });
+      const draft = await loadQuoteDraft();
+
+      expect(draft).toBeDefined();
+      expect(draft?.items).toHaveLength(1);
+      expect(draft?.items[0].nombre).toBe('ALMENDRA LAMINADA');
+      expect(draft?.total).toBe(247615);
+    });
+
+    it('overwrites the previous draft (single draft slot, last-write-wins)', async () => {
+      await saveQuoteDraft({ items: [], totalNeto: 1, iva: 1, total: 1 });
+      await saveQuoteDraft({ items: [], totalNeto: 999, iva: 999, total: 999 });
+
+      const draft = await loadQuoteDraft();
+      expect(draft?.totalNeto).toBe(999);
+    });
+
+    it('returns undefined when no draft exists', async () => {
+      const draft = await loadQuoteDraft();
+      expect(draft).toBeUndefined();
+    });
+
+    it('clears the draft', async () => {
+      await saveQuoteDraft({ items: [], totalNeto: 1, iva: 1, total: 1 });
+      await clearQuoteDraft();
+
+      const draft = await loadQuoteDraft();
+      expect(draft).toBeUndefined();
     });
   });
 });

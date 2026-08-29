@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseChileanNumber, parseFormato } from '../price';
+import { parseChileanNumber, parseFormato, tryParseChileanNumber } from '../price';
 
 describe('parseChileanNumber', () => {
   it('should parse Chilean decimal format with comma', () => {
@@ -23,6 +23,25 @@ describe('parseChileanNumber', () => {
     expect(parseChileanNumber('')).toBe(0);
     expect(parseChileanNumber('abc')).toBe(0);
     expect(parseChileanNumber('not a number')).toBe(0);
+  });
+});
+
+describe('tryParseChileanNumber', () => {
+  it('parses valid Chilean formats to a number', () => {
+    expect(tryParseChileanNumber('11,34')).toBeCloseTo(11.34);
+    expect(tryParseChileanNumber('10')).toBeCloseTo(10);
+    expect(tryParseChileanNumber('0')).toBe(0);
+  });
+
+  it('returns null for invalid input (distinguishing invalid from real 0)', () => {
+    expect(tryParseChileanNumber('')).toBeNull();
+    expect(tryParseChileanNumber('abc')).toBeNull();
+    expect(tryParseChileanNumber('11,34,5')).toBeNull();
+    expect(tryParseChileanNumber('1.5')).toBeNull(); // punto, no coma chilena
+  });
+
+  it('accepts whitespace around a valid number', () => {
+    expect(tryParseChileanNumber(' 11,34 ')).toBeCloseTo(11.34);
   });
 });
 

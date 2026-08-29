@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useQuote } from '../useQuote';
+import { loadQuoteDraft, saveQuoteDraft, clearQuoteDraft } from '../../db/database';
 import type { Product } from '../../types/product';
+import type { QuoteItem } from '../../types/quote';
 
 // Mock product helpers
 const createMockProduct = (overrides: Partial<Product> = {}): Product => ({
@@ -272,6 +274,68 @@ describe('useQuote', () => {
       // subtotal = 50 * 0 = 0
       expect(result.current.totals.subtotal).toBe(0);
       expect(result.current.totals.total).toBe(0);
+    });
+  });
+
+  describe('draft autosave', () => {
+    beforeEach(async () => {
+      await clearQuoteDraft();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('starts empty when no draft exists', async () => {
+      const { result } = renderHook(() => useQuote());
+      await waitFor(() => expect(result.current.items).toEqual([]));
+    });
+
+    it('restores items from a saved draft on mount', async () => {
+      const draftItems: QuoteItem[] = [
+        { id: 'draft-item-1', productId: 7, nombre: 'PISTACHO PELADO', formato: '10', cantidad: 3, precioKg: 25000 },
+      ];
+      await saveQuoteDraft({ items: draftItems, totalNeto: 750000, iva: 142500, total: 892500 });
+
+      const { result } = renderHook(() => useQuote());
+
+      await waitFor(() => {
+        expect(result.current.items).toHaveLength(1);
+        expect(result.current.items[0].nombre).toBe('PISTACHO PELADO');
+        expect(result.current.items[0].cantidad).toBe(3);
+      });
+    });
+
+    it('autosaves items to the draft after mutations (debounced)', async () => {
+      const { result } = renderHook(() => useQuote());
+
+      act(() => {
+        result.current.addItem(createMockProduct({ id: 1, nombre: 'Chía' }));
+      });
+
+      await waitFor(async () => {
+        const draft = await loadQuoteDraft();
+        expect(draft?.items).toHaveLength(1);
+        expect(draft?.items[0].nombre).toBe('Chía');
+      }, { timeout: 4000 });
+    });
+
+    it('clears the draft on clearAll', async () => {
+      const { result } = renderHook(() => useQuote());
+
+      act(() => {
+        result.current.addItem(createMockProduct({ id: 1, nombre: 'Chía' }));
+      });
+      await waitFor(async () => {
+        expect(await loadQuoteDraft()).toBeDefined();
+      }, { timeout: 4000 });
+
+      act(() => {
+        result.current.clearAll();
+      });
+      await waitFor(async () => {
+        expect(await loadQuoteDraft()).toBeUndefined();
+      }, { timeout: 4000 });
     });
   });
 });

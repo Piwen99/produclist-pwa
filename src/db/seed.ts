@@ -1,6 +1,36 @@
 import { db, deduplicateProducts } from './database';
 import type { ProductInput } from '../types/product';
 
+// Dedup one-shot por sesión: corre la primera vez que se monta la app en la
+// pestaña (StrictMode monta 2 veces en dev; recargas repiten el mount).
+// sessionStorage persiste entre recargas de la misma pestaña; el flag de
+// módulo cubre entornos sin sessionStorage (tests, SSR).
+const DEDUP_KEY = 'produclist-dedup-done';
+let _dedupDoneInModule = false;
+
+async function isDedupDone(): Promise<boolean> {
+  if (_dedupDoneInModule) return true;
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      return sessionStorage.getItem(DEDUP_KEY) === '1';
+    }
+  } catch {
+    // sessionStorage puede fallar (privado/bloqueado) — flag de módulo alcanza.
+  }
+  return false;
+}
+
+async function markDedupDone(): Promise<void> {
+  _dedupDoneInModule = true;
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(DEDUP_KEY, '1');
+    }
+  } catch {
+    // no-op
+  }
+}
+
 export const seedProducts: ProductInput[] = [
   // Frutos Secos
   { nombre: 'ALMENDRA LAMINADA', categoria: 'Frutos Secos', formato: '11,34', precioNeto: 9200, disponible: true },
@@ -56,10 +86,14 @@ export const seedProducts: ProductInput[] = [
 ];
 
 export async function seedDatabase(): Promise<void> {
-  // Clean any existing duplicates first (idempotent)
-  const removed = await deduplicateProducts();
-  if (removed > 0) {
-    console.log(`[Seed] Removed ${String(removed)} duplicate products before seeding`);
+  // Clean existing duplicates ONCE per browser session (not on every mount —
+  // the dedup reads the whole table, so it was a wasted round-trip per load).
+  if (!(await isDedupDone())) {
+    const removed = await deduplicateProducts();
+    if (removed > 0) {
+      console.log(`[Seed] Removed ${String(removed)} duplicate products before seeding`);
+    }
+    await markDedupDone();
   }
 
   // Transaction ensures atomicity: if StrictMode fires twice,
