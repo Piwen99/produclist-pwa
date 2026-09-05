@@ -5,6 +5,7 @@ import type { QuoteItem } from '../types/quote';
 export class ProduclistDB extends Dexie {
   products!: Table<Product>;
   quotes!: Table<SavedQuote>;
+  drafts!: Table<QuoteDraft>;
 
   constructor() {
     super('ProduclistDB');
@@ -14,6 +15,12 @@ export class ProduclistDB extends Dexie {
     this.version(2).stores({
       products: '++id, nombre, categoria, disponible',
       quotes: '++id, fecha'
+    });
+    this.version(3).stores({
+      products: '++id, nombre, categoria, disponible',
+      quotes: '++id, fecha',
+      // Borrador único de cotización (autosave). Una sola fila con clave fija.
+      drafts: 'id'
     });
   }
 }
@@ -26,6 +33,18 @@ export interface SavedQuote {
   iva: number;
   total: number;
 }
+
+// Borrador de cotización (autosave): misma forma que SavedQuote pero sin
+// fecha y con una fila única de clave fija.
+export interface QuoteDraft {
+  id: 'draft';
+  items: QuoteItem[];
+  totalNeto: number;
+  iva: number;
+  total: number;
+}
+
+export const DRAFT_KEY = 'draft' as const;
 
 export const db = new ProduclistDB();
 
@@ -130,4 +149,30 @@ export async function getAllQuotes(): Promise<SavedQuote[]> {
  */
 export async function deleteQuote(id: number): Promise<void> {
   await db.quotes.delete(id);
+}
+
+// ── Quote draft (autosave del cotizador) ──────────────────────────────────
+
+/**
+ * Persist the current quote as a single-slot draft (last-write-wins).
+ * Llamado con debounce desde el cotizador: sobrevive refresh/navegación.
+ */
+export async function saveQuoteDraft(
+  data: Omit<QuoteDraft, 'id'>
+): Promise<void> {
+  await db.drafts.put({ id: DRAFT_KEY, ...data });
+}
+
+/**
+ * Load the saved draft, or undefined if none exists.
+ */
+export async function loadQuoteDraft(): Promise<QuoteDraft | undefined> {
+  return await db.drafts.get(DRAFT_KEY);
+}
+
+/**
+ * Remove the draft (after saving the quote or clearing the cotizador).
+ */
+export async function clearQuoteDraft(): Promise<void> {
+  await db.drafts.delete(DRAFT_KEY);
 }

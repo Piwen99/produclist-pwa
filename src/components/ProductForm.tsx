@@ -26,6 +26,12 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
     disponible: product?.disponible ?? true,
   });
 
+  // Precio como string: distingue campo vacío de un 0 real (fix 24-ago-2026:
+  // antes, limpiar el campo guardaba $0 en silencio — Number('') === 0).
+  const [precioNetoStr, setPrecioNetoStr] = useState<string>(
+    product ? String(product.precioNeto) : ''
+  );
+
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = useCallback((): boolean => {
@@ -35,7 +41,9 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
       newErrors.nombre = 'El nombre es obligatorio';
     }
 
-    if (formData.precioNeto < 0) {
+    if (precioNetoStr.trim() === '') {
+      newErrors.precioNeto = 'El precio es obligatorio';
+    } else if (formData.precioNeto < 0) {
       newErrors.precioNeto = 'El precio no puede ser negativo';
     }
 
@@ -45,7 +53,7 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [formData]);
+  }, [formData, precioNetoStr]);
 
   const handleSubmit = useCallback((e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -65,7 +73,7 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
     }
   }, [errors]);
 
-  const precioBruto = calcPrecioBruto(formData.precioNeto);
+  const precioBruto = calcPrecioBruto(Number(precioNetoStr) || 0);
 
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('es-CL', {
@@ -151,8 +159,11 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
                 id="precioNeto"
                 min="0"
                 step="1"
-                value={formData.precioNeto}
-                onChange={(e) => updateField('precioNeto', Number(e.target.value))}
+                value={precioNetoStr}
+                onChange={(e) => {
+                  setPrecioNetoStr(e.target.value);
+                  updateField('precioNeto', e.target.value === '' ? 0 : Number(e.target.value));
+                }}
                 className={`w-full px-3 py-3 text-base border rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 dark:bg-gray-700 dark:text-white touch-manipulation ${
                   errors.precioNeto ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                 }`}

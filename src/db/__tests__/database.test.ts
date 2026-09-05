@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { seedProducts } from '../seed';
+import { seedProducts, seedDatabase } from '../seed';
 import { db } from '../database';
 import type { Category } from '../../types/product';
 
@@ -93,5 +93,43 @@ describe('database CRUD', () => {
     
     const semillas = await db.products.where('categoria').equals('Semillas/Cereal').toArray();
     expect(semillas.length).toBe(1);
+  });
+});
+
+describe('seedDatabase — dedup one-shot', () => {
+  beforeEach(async () => {
+    await db.products.clear();
+  });
+
+  it('runs deduplication only ONCE per session, not on every call', async () => {
+    // DB with existing duplicate products (as if imported twice before the fix)
+    await db.products.bulkAdd([
+      { nombre: 'DUP', categoria: 'Frutos Secos' as Category, formato: '10', precioNeto: 1000, disponible: true },
+      { nombre: 'DUP', categoria: 'Frutos Secos' as Category, formato: '10', precioNeto: 1000, disponible: true },
+    ]);
+    expect(await db.products.count()).toBe(2);
+
+    // First call: dedup runs, removes the duplicate
+    await seedDatabase();
+    expect(await db.products.count()).toBe(1);
+
+    // Simulate a second app mount (StrictMode double-mount) with a new duplicate
+    await db.products.add({ nombre: 'DUP', categoria: 'Frutos Secos', formato: '10', precioNeto: 1000, disponible: true });
+    await seedDatabase();
+
+    // Second call must NOT re-run dedup (it was already done this session):
+    // the duplicate stays, only the first mount cleans up.
+    expect(await db.products.count()).toBe(2);
+  });
+
+  it('seed does not run when database already has products', async () => {
+    await db.products.add({ nombre: 'MANO', categoria: 'Frutos Secos', formato: '10', precioNeto: 1000, disponible: true });
+
+    await seedDatabase();
+
+    // DB already populated → seed skips, own product untouched
+    expect(await db.products.count()).toBe(1);
+    const product = await db.products.where('nombre').equals('MANO').first();
+    expect(product).toBeDefined();
   });
 });

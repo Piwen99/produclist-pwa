@@ -138,6 +138,23 @@ describe('ProductForm — create mode', () => {
 
     expect(onSubmit).toHaveBeenCalled();
   });
+
+  it('blocks submit with a validation error when precioNeto is cleared (empty, not 0)', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm();
+
+    // Fill everything valid, then clear the price field completely
+    await user.type(screen.getByLabelText(/nombre/i), 'Test');
+    await user.selectOptions(screen.getByLabelText(/categoría/i), 'Legumbres');
+    await user.type(screen.getByLabelText(/formato/i), '1,5');
+    const precioInput = screen.getByLabelText(/precio neto/i);
+    await user.clear(precioInput);
+    await user.click(screen.getByRole('button', { name: 'Crear Producto' }));
+
+    // Clearing the field must NOT silently submit $0
+    expect(screen.getByText('El precio es obligatorio')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
 });
 
 describe('ProductForm — edit mode', () => {
