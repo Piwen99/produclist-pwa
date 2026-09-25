@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { QuoteItem } from './QuoteItem';
 import { QuoteProductSelector } from './QuoteProductSelector';
 import { QuoteShareButton } from './QuoteShareButton';
-import { saveQuote } from '../db/database';
+import { saveQuote, getClientNames } from '../db/database';
 import { useToast } from '../hooks/useToast';
 import type { QuoteItem as QuoteItemType, QuoteTotals } from '../types/quote';
 import type { Product } from '../types/product';
@@ -28,7 +28,13 @@ const chileanFormat = (n: number) => n.toFixed(2).replace('.', ',');
 
 export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePrecioKg, onRemove }: CotizadorProps) {
   const [showSelector, setShowSelector] = useState(false);
+  const [cliente, setCliente] = useState('');
+  const [clients, setClients] = useState<string[]>([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    void getClientNames().then(setClients).catch(console.error);
+  }, []);
 
   const handleSave = async () => {
     if (items.length === 0) {
@@ -36,8 +42,10 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
       return;
     }
     try {
+      const trimmed = cliente.trim();
       await saveQuote({
         items,
+        cliente: trimmed === '' ? undefined : trimmed,
         totalNeto: totals.subtotal,
         iva: totals.iva,
         total: totals.total,
@@ -129,6 +137,30 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
       {/* Share button */}
       <div className="mt-4">
         <QuoteShareButton items={items} totals={totals} />
+      </div>
+
+      {/* Client (optional) */}
+      <div className="mt-4">
+        <label
+          htmlFor="quote-client"
+          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+        >
+          Cliente (opcional)
+        </label>
+        <input
+          id="quote-client"
+          list="quote-clients"
+          type="text"
+          value={cliente}
+          onChange={(e) => setCliente(e.target.value)}
+          placeholder="Nombre del cliente"
+          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+        />
+        <datalist id="quote-clients">
+          {clients.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
       </div>
 
       {/* Save button */}

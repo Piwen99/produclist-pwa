@@ -13,6 +13,7 @@ import { PDFButton } from './components/PDFButton';
 import { InstallPrompt } from './components/InstallPrompt';
 import { Cotizador } from './components/Cotizador';
 import { QuoteHistory } from './components/QuoteHistory';
+import { ClientPrices } from './components/ClientPrices';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { BackupReminder } from './components/BackupReminder';
 import { ListSendForm } from './components/ListSendForm';
@@ -278,12 +279,12 @@ function App() {
               </div>
 
               {/* View tabs */}
-              <nav className="flex items-center">
+              <nav className="flex items-center gap-0.5 overflow-x-auto">
                 <NavLink
                   to="/"
                   end
                   className={({ isActive }) =>
-                    `px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                    `shrink-0 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -294,7 +295,7 @@ function App() {
                 <NavLink
                   to="/cotizador"
                   className={({ isActive }) =>
-                    `px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                    `shrink-0 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -305,13 +306,24 @@ function App() {
                 <NavLink
                   to="/historial"
                   className={({ isActive }) =>
-                    `px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                    `shrink-0 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                     }`}
                 >
                   Historial
+                </NavLink>
+                <NavLink
+                  to="/clientes"
+                  className={({ isActive }) =>
+                    `shrink-0 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                      isActive
+                        ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                >
+                  Clientes
                 </NavLink>
               </nav>
             </div>
@@ -362,6 +374,7 @@ function App() {
             />
           } />
           <Route path="historial" element={<QuoteHistory />} />
+          <Route path="clientes" element={<ClientPrices />} />
         </Routes>
       </main>
 
