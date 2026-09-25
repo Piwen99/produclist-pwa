@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Toast } from '../Toast';
-import type { ToastItem } from '../useToast';
+import type { ToastItem } from '../../hooks/useToast';
 
 describe('Toast', () => {
   const mockToast: ToastItem = {

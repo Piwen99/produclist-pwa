@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
-import { ToastProvider } from './hooks/useToast'
+import { ToastProvider } from './hooks/ToastProvider'
 
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('Root element not found');

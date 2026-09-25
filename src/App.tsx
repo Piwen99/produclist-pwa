@@ -230,9 +230,9 @@ function App() {
       <header className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6">
           <div className="flex items-center justify-between h-14 sm:h-16">
-            <div className="flex items-center gap-1 sm:gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
               {/* Hamburger menu for export/import */}
-              <div className="relative" ref={mobileMenuRef}>
+              <div className="relative shrink-0" ref={mobileMenuRef}>
                 <button
                   onClick={() => setShowMobileMenu(v => !v)}
                   className="p-2 text-gray-500 hover:text-orange-500 transition-colors touch-manipulation"
@@ -279,12 +279,12 @@ function App() {
               </div>
 
               {/* View tabs */}
-              <nav className="flex items-center gap-0.5 overflow-x-auto">
+              <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
                 <NavLink
                   to="/"
                   end
                   className={({ isActive }) =>
-                    `shrink-0 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                    `shrink-0 px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -295,7 +295,7 @@ function App() {
                 <NavLink
                   to="/cotizador"
                   className={({ isActive }) =>
-                    `shrink-0 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                    `shrink-0 px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -306,7 +306,7 @@ function App() {
                 <NavLink
                   to="/historial"
                   className={({ isActive }) =>
-                    `shrink-0 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                    `shrink-0 px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -317,7 +317,7 @@ function App() {
                 <NavLink
                   to="/clientes"
                   className={({ isActive }) =>
-                    `shrink-0 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                    `shrink-0 px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -329,13 +329,13 @@ function App() {
             </div>
             <button
               onClick={handleAddNew}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors touch-manipulation"
+              aria-label="Nuevo producto"
+              className="flex shrink-0 items-center gap-1.5 sm:gap-2 p-2 sm:px-4 sm:py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors touch-manipulation"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               <span className="hidden sm:inline">Nuevo Producto</span>
-              <span className="sm:hidden">Nuevo</span>
             </button>
           </div>
         </div>

@@ -21,7 +21,11 @@ export function useQuote(): UseQuoteReturn {
   const [draftLoaded, setDraftLoaded] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const itemsRef = useRef<QuoteItem[]>(items);
-  itemsRef.current = items;
+
+  // Keep the ref at the latest items for the debounced save timer.
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   // ── Cargar borrador guardado al montar (autosave: sobrevive refresh) ──
   useEffect(() => {

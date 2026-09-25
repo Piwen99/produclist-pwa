@@ -1,6 +1,4 @@
 import {
-  createContext,
-  useContext,
   useState,
   useCallback,
   useRef,
@@ -8,27 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 import { Toast } from '../components/Toast';
-
-export type ToastType = 'success' | 'error' | 'info' | 'warning';
-
-export interface ToastItem {
-  id: string;
-  message: string;
-  type: ToastType;
-}
-
-interface ToastContextValue {
-  toasts: ToastItem[];
-  toast: {
-    success: (message: string) => void;
-    error: (message: string) => void;
-    info: (message: string) => void;
-    warning: (message: string) => void;
-  };
-  dismiss: (id: string) => void;
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null);
+import { ToastContext, type ToastItem, type ToastType } from './useToast';
 
 const TOAST_DURATION = {
   success: 4000,
@@ -51,7 +29,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addToast = useCallback((message: string, type: ToastType) => {
-    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const id = `toast-${String(Date.now())}-${Math.random().toString(36).slice(2, 9)}`;
     const newToast: ToastItem = { id, message, type };
 
     setToasts((prev) => [...prev, newToast]);
@@ -72,8 +50,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    const timeouts = timeoutsRef.current;
     return () => {
-      timeoutsRef.current.forEach((timeout) => clearTimeout(timeout));
+      timeouts.forEach((timeout) => clearTimeout(timeout));
     };
   }, []);
 
@@ -93,12 +72,4 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       </div>
     </ToastContext.Provider>
   );
-}
-
-export function useToast(): ToastContextValue {
-  const context = useContext(ToastContext);
-  if (!context) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
-  return context;
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { Cotizador } from '../Cotizador';
-import { ToastProvider } from '../../hooks/useToast';
+import { ToastProvider } from '../../hooks/ToastProvider';
 import type { QuoteItem } from '../../types/quote';
 
 const mockHandlers = {
