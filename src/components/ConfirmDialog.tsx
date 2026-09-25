@@ -4,9 +4,12 @@ interface ConfirmDialogProps {
   isOpen: boolean;
   title: string;
   message: string;
-  itemName: string;
+  /** Optional quoted subject, e.g. the name of the item being deleted. */
+  itemName?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  /** Optional note rendered under the message. */
+  note?: string;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -18,6 +21,7 @@ export function ConfirmDialog({
   itemName,
   confirmLabel = 'Eliminar',
   cancelLabel = 'Cancelar',
+  note = 'Esta acción no se puede deshacer.',
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -94,11 +98,13 @@ export function ConfirmDialog({
           <p className="text-center text-sm text-gray-600 dark:text-gray-400 mb-1">
             {message}
           </p>
-          <p className="text-center text-sm font-medium text-gray-900 dark:text-white mb-1 break-words">
-            "{itemName}"
-          </p>
+          {itemName !== undefined && (
+            <p className="text-center text-sm font-medium text-gray-900 dark:text-white mb-1 break-words">
+              "{itemName}"
+            </p>
+          )}
           <p className="text-center text-xs text-gray-500 dark:text-gray-400 mb-6">
-            Esta acción no se puede deshacer.
+            {note}
           </p>
 
           {/* Buttons */}

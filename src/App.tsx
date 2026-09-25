@@ -13,7 +13,8 @@ import { PDFButton } from './components/PDFButton';
 import { InstallPrompt } from './components/InstallPrompt';
 import { Cotizador } from './components/Cotizador';
 import { QuoteHistory } from './components/QuoteHistory';
-import { exportToJSON, importProducts } from './utils/exportImport';
+import { ConfirmDialog } from './components/ConfirmDialog';
+import { exportToJSON, previewImport, applyImport, type ImportPreview } from './utils/exportImport';
 import type { Product, ProductInput } from './types/product';
 import './App.css';
 
@@ -29,6 +30,7 @@ function App() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
 
   // Cotizador state
   const { items, addItem, removeItem, updateItemQty, updateItemPrecioKg, totals } = useQuote();
@@ -120,10 +122,44 @@ function App() {
 
   const handleImportFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Reset the input early so the same file can be re-selected later.
+    e.target.value = '';
     if (!file) return;
 
     try {
-      const result = await importProducts(file);
+      // Dry-run: validate and match against the catalog WITHOUT writing anything.
+      const preview = await previewImport(await file.text());
+
+      if (preview.toAdd.length === 0 && preview.toUpdate.length === 0) {
+        toast.error(
+          preview.errors.length > 0
+            ? `No se importó nada: ${String(preview.errors.length)} productos con errores.`
+            : 'El archivo no contiene productos.'
+        );
+        if (preview.errors.length > 0) console.warn('[Import] Errors:', preview.errors);
+        return;
+      }
+
+      // Nothing is written yet — ask for confirmation first.
+      setImportPreview(preview);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al importar.');
+    }
+  }, [toast]);
+
+  const handleConfirmImport = useCallback(async () => {
+    const preview = importPreview;
+    setImportPreview(null);
+    if (!preview) return;
+
+    try {
+      // Back up the current catalog before overwriting anything, so a wrong or
+      // stale file can never destroy the price list irreversibly.
+      if (preview.toUpdate.length > 0 && products) {
+        exportToJSON(products);
+      }
+
+      const result = await applyImport(preview);
       const parts: string[] = [];
       if (result.success > 0) parts.push(`${String(result.success)} agregados`);
       if (result.updated > 0) parts.push(`${String(result.updated)} actualizados`);
@@ -136,12 +172,22 @@ function App() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al importar.');
     }
+  }, [importPreview, products, toast]);
 
-    // Reset file input so the same file can be re-selected
-    e.target.value = '';
-  }, [toast]);
+  const handleCancelImport = useCallback(() => {
+    setImportPreview(null);
+  }, []);
 
   const hasProducts = products && products.length > 0;
+
+  const importMessage = importPreview
+    ? `Se agregarán ${String(importPreview.toAdd.length)} y se actualizarán ${String(importPreview.toUpdate.length)} productos.`
+    : '';
+
+  const importNote =
+    importPreview && importPreview.toUpdate.length > 0
+      ? 'Se descargará un backup de la lista actual antes de aplicar.'
+      : 'Los productos nuevos se agregan sin pisar los existentes.';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -296,6 +342,17 @@ function App() {
           onCancel={handleCloseEdit}
         />
       )}
+
+      {/* Import confirmation — nothing is written until this is accepted */}
+      <ConfirmDialog
+        isOpen={importPreview !== null}
+        title="Confirmar importación"
+        message={importMessage}
+        confirmLabel="Importar"
+        note={importNote}
+        onConfirm={() => { void handleConfirmImport(); }}
+        onCancel={handleCancelImport}
+      />
 
       {/* Footer spacer for mobile */}
       <div className="h-20 sm:h-24" aria-hidden="true" />
