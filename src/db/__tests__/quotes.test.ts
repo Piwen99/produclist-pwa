@@ -41,7 +41,6 @@ describe('quotes database', () => {
 
     it('should use current date when fecha not provided', async () => {
       const before = new Date();
-      const items: QuoteItem[] = [];
       const id = await saveQuote({ items: [], totalNeto: 0, iva: 0, total: 0 });
       const after = new Date();
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getAllQuotes, deleteQuote, type SavedQuote } from '../db/database';
 import { useToast } from '../hooks/useToast';
@@ -28,8 +28,9 @@ interface QuoteCardProps {
 
 function QuoteCard({ quote, onDelete }: QuoteCardProps) {
   const handleDelete = () => {
+    if (quote.id === undefined) return;
     if (confirm('¿Eliminar esta cotización?')) {
-      onDelete(quote.id!);
+      onDelete(quote.id);
     }
   };
 
@@ -93,22 +94,26 @@ export function QuoteHistory() {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  // toast.error is memoized in ToastProvider; the toast container object is not.
+  const showError = toast.error;
+
+  const loadQuotes = useCallback(() => {
+    getAllQuotes()
+      .then((data) => {
+        setQuotes(data);
+      })
+      .catch((error: unknown) => {
+        console.error('Error loading quotes:', error);
+        showError('Error al cargar las cotizaciones');
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [showError]);
 
   useEffect(() => {
     loadQuotes();
-  }, []);
-
-  const loadQuotes = async () => {
-    try {
-      const data = await getAllQuotes();
-      setQuotes(data);
-    } catch (error) {
-      console.error('Error loading quotes:', error);
-      toast.error('Error al cargar las cotizaciones');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  }, [loadQuotes]);
 
   const handleDelete = async (id: number) => {
     try {
@@ -164,7 +169,7 @@ export function QuoteHistory() {
       <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Historial de Cotizaciones</h2>
       <div>
         {quotes.map((quote) => (
-          <QuoteCard key={quote.id} quote={quote} onDelete={handleDelete} />
+          <QuoteCard key={quote.id} quote={quote} onDelete={(id) => { void handleDelete(id); }} />
         ))}
       </div>
     </div>

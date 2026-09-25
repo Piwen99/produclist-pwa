@@ -8,7 +8,7 @@ import type { ProductInput } from '../types/product';
 const DEDUP_KEY = 'produclist-dedup-done';
 let _dedupDoneInModule = false;
 
-async function isDedupDone(): Promise<boolean> {
+function isDedupDone(): boolean {
   if (_dedupDoneInModule) return true;
   try {
     if (typeof sessionStorage !== 'undefined') {
@@ -20,7 +20,7 @@ async function isDedupDone(): Promise<boolean> {
   return false;
 }
 
-async function markDedupDone(): Promise<void> {
+function markDedupDone(): void {
   _dedupDoneInModule = true;
   try {
     if (typeof sessionStorage !== 'undefined') {
@@ -88,12 +88,12 @@ export const seedProducts: ProductInput[] = [
 export async function seedDatabase(): Promise<void> {
   // Clean existing duplicates ONCE per browser session (not on every mount —
   // the dedup reads the whole table, so it was a wasted round-trip per load).
-  if (!(await isDedupDone())) {
+  if (!isDedupDone()) {
     const removed = await deduplicateProducts();
     if (removed > 0) {
       console.log(`[Seed] Removed ${String(removed)} duplicate products before seeding`);
     }
-    await markDedupDone();
+    markDedupDone();
   }
 
   // Transaction ensures atomicity: if StrictMode fires twice,
