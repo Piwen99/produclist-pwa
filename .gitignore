@@ -24,6 +24,12 @@ dist-ssr
 *.sln
 *.sw?
 
+# Local agent tooling (not shared)
+.hermes/
+
+# Generated cache (keep .atl/skill-registry.md tracked, not its fingerprint cache)
+.atl/.skill-registry.cache.json
+
 # Reference files
 referencia/
 

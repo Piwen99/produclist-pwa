@@ -15,6 +15,14 @@ export default defineConfig({
         'src/test-setup.ts',
         'src/vite-env.d.ts',
       ],
+      // Floor set just under the current coverage. CI runs this via `pnpm
+      // coverage`, so a real regression fails the build instead of slipping in.
+      thresholds: {
+        statements: 60,
+        branches: 55,
+        functions: 60,
+        lines: 60,
+      },
     },
   },
 });
