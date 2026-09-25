@@ -78,14 +78,6 @@ export async function deleteProduct(id: number): Promise<void> {
   await db.products.delete(id);
 }
 
-export async function getAllProducts(): Promise<Product[]> {
-  return await db.products.toArray();
-}
-
-export async function getProductById(id: number): Promise<Product | undefined> {
-  return await db.products.get(id);
-}
-
 /**
  * Remove duplicate products by name, keeping the entry with the lowest ID.
  * Safe to call multiple times (idempotent).

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseChileanNumber, parseFormato, tryParseChileanNumber } from '../price';
+import { parseChileanNumber, tryParseChileanNumber } from '../price';
 
 describe('parseChileanNumber', () => {
   it('should parse Chilean decimal format with comma', () => {
@@ -42,20 +42,5 @@ describe('tryParseChileanNumber', () => {
 
   it('accepts whitespace around a valid number', () => {
     expect(tryParseChileanNumber(' 11,34 ')).toBeCloseTo(11.34);
-  });
-});
-
-describe('parseFormato', () => {
-  it('should be an alias for parseChileanNumber', () => {
-    expect(parseFormato('11,34')).toBeCloseTo(11.34);
-    expect(parseFormato('1,5')).toBeCloseTo(1.5);
-    expect(parseFormato('')).toBe(0);
-  });
-
-  it('should produce same output as parseChileanNumber', () => {
-    const testValues = ['11,34', '1', '0,5', 'abc', ''];
-    testValues.forEach(val => {
-      expect(parseFormato(val)).toBe(parseChileanNumber(val));
-    });
   });
 });

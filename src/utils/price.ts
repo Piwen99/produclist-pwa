@@ -23,9 +23,6 @@ export function tryParseChileanNumber(formato: string): number | null {
   return isNaN(parsed) ? null : parsed;
 }
 
-/** Alias for parseChileanNumber — used in quote calculations */
-export const parseFormato = parseChileanNumber;
-
 /**
  * Validate that a string is in Chilean decimal format
  * Accepts whole numbers (e.g., "5") or decimal with comma (e.g., "11,34")
