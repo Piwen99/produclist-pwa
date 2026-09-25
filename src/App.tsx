@@ -14,6 +14,7 @@ import { InstallPrompt } from './components/InstallPrompt';
 import { Cotizador } from './components/Cotizador';
 import { QuoteHistory } from './components/QuoteHistory';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { BackupReminder } from './components/BackupReminder';
 import { exportToJSON, previewImport, applyImport, type ImportPreview } from './utils/exportImport';
 import type { Product, ProductInput } from './types/product';
 import './App.css';
@@ -297,6 +298,7 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
+        {hasProducts && <BackupReminder onExport={handleExportJSON} />}
         <Routes>
           <Route index element={
             <ProductList

@@ -1,6 +1,7 @@
 import { addProduct, db } from '../db/database';
 import type { Product, ProductInput, Category } from '../types/product';
 import { isValidChileanFormat } from './price';
+import { markBackedUp } from './backupReminder';
 
 const CATEGORY_VALUES: Category[] = [
   'Frutos Secos',
@@ -31,6 +32,8 @@ export function exportToJSON(products: Product[]): void {
   const json = JSON.stringify(products, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   downloadBlob(blob, 'produclist-productos.json');
+  // Any export counts as a backup — the reminder resets from here.
+  markBackedUp();
 }
 
 /**
