@@ -113,10 +113,6 @@ const styles = StyleSheet.create({
   // ── Data rows ──
   dataRow: {
     flexDirection: 'row',
-    // minHeight prevents react-pdf from splitting a row across pages (a row
-    // that doesn't fully fit is pushed whole to the next page instead of
-    // leaving the product name on one page and its price columns on the next).
-    minHeight: 20,
     borderLeftWidth: 0.5,
     borderLeftColor: '#d5d9c5',
     borderRightWidth: 0.5,
@@ -253,7 +249,10 @@ function ProductRow({ product, index }: { product: Product; index: number }) {
   const rowStyle = index % 2 === 0 ? styles.dataRowEven : styles.dataRowOdd;
 
   return (
-    <View style={[styles.dataRow, rowStyle]}>
+    // wrap={false} keeps the whole row on one page. react-pdf otherwise splits a
+    // flex row at a page break, leaving the product name on one page and its
+    // price cells on the next with the PRODUCTO cell collapsed to zero width.
+    <View style={[styles.dataRow, rowStyle]} wrap={false}>
       <View style={[styles.cell, styles.colProducto]}>
         <Text style={styles.cellText}>
           <Text>{product.nombre}</Text>
@@ -287,7 +286,7 @@ function CategorySection({
 
   return (
     <View>
-      <View style={styles.categoryRow}>
+      <View style={styles.categoryRow} minPresenceAhead={40}>
         <View style={[styles.categoryCell, { width: '100%' }]}>
           <Text style={styles.categoryText}>{category}</Text>
         </View>
