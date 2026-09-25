@@ -11,13 +11,10 @@ interface PDFButtonProps {
 }
 
 export function PDFButton({ disabled = false }: PDFButtonProps) {
-  const [showOfflineWarning, setShowOfflineWarning] = useState(false);
   const [pdfState, setPdfState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [pdfModule, setPdfModule] = useState<PDFModule | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const retryTimeoutRef = useRef<number | undefined>(undefined);
-
-  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
   // Preload PDF module on mount
   useEffect(() => {
@@ -57,13 +54,6 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
       }
     };
   }, [retryCount]); // Retry when retryCount changes
-
-  const handleClick = () => {
-    if (!isOnline) {
-      setShowOfflineWarning(true);
-      setTimeout(() => setShowOfflineWarning(false), 3000);
-    }
-  };
 
   // Error state
   if (pdfState === 'error' && !pdfModule) {
@@ -149,8 +139,7 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
       >
         {({ loading, error }) => (
           <button
-            onClick={handleClick}
-            disabled={disabled || loading || !isOnline}
+            disabled={disabled || loading}
             className={`
               fixed bottom-4 right-4 sm:bottom-6 sm:right-6
               flex items-center gap-2
@@ -160,7 +149,7 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
               transition-all duration-200
               touch-manipulation
               ${
-                disabled || loading || !isOnline
+                disabled || loading
                   ? 'bg-gray-400 cursor-not-allowed shadow-none'
                   : 'bg-red-600 hover:bg-red-700 hover:shadow-xl active:scale-95 text-white'
               }
@@ -233,18 +222,6 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
           </button>
         )}
       </pdfModule.PDFDownloadLink>
-
-      {/* Offline warning toast */}
-      {showOfflineWarning && (
-        <div className="fixed bottom-20 right-4 sm:bottom-24 sm:right-6 z-50 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-200 px-4 py-3 rounded-lg shadow-lg text-sm max-w-xs animate-in fade-in slide-in-from-bottom-2">
-          <div className="flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <span>Conéctate a internet para generar el PDF</span>
-          </div>
-        </div>
-      )}
     </>
   );
 }
