@@ -15,7 +15,7 @@ import { Cotizador } from './components/Cotizador';
 import { QuoteHistory } from './components/QuoteHistory';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { BackupReminder } from './components/BackupReminder';
-import { exportToJSON, previewImport, applyImport, type ImportPreview } from './utils/exportImport';
+import { exportBackup, previewImport, applyImport, type ImportPreview } from './utils/exportImport';
 import type { Product, ProductInput } from './types/product';
 import './App.css';
 
@@ -114,7 +114,7 @@ function App() {
 
   const handleExportJSON = useCallback(() => {
     if (!products) return;
-    exportToJSON(products);
+    void exportBackup(products);
   }, [products]);
 
   const handleImportClick = useCallback(() => {
@@ -131,7 +131,11 @@ function App() {
       // Dry-run: validate and match against the catalog WITHOUT writing anything.
       const preview = await previewImport(await file.text());
 
-      if (preview.toAdd.length === 0 && preview.toUpdate.length === 0) {
+      if (
+        preview.toAdd.length === 0 &&
+        preview.toUpdate.length === 0 &&
+        preview.quotesToAdd.length === 0
+      ) {
         toast.error(
           preview.errors.length > 0
             ? `No se importó nada: ${String(preview.errors.length)} productos con errores.`
@@ -157,13 +161,14 @@ function App() {
       // Back up the current catalog before overwriting anything, so a wrong or
       // stale file can never destroy the price list irreversibly.
       if (preview.toUpdate.length > 0 && products) {
-        exportToJSON(products);
+        await exportBackup(products);
       }
 
       const result = await applyImport(preview);
       const parts: string[] = [];
       if (result.success > 0) parts.push(`${String(result.success)} agregados`);
       if (result.updated > 0) parts.push(`${String(result.updated)} actualizados`);
+      if (result.quotesAdded > 0) parts.push(`${String(result.quotesAdded)} cotizaciones`);
       if (result.errors.length > 0) parts.push(`${String(result.errors.length)} errores`);
 
       toast.success(`Importación completada: ${parts.join(', ')}.`);
@@ -182,7 +187,7 @@ function App() {
   const hasProducts = products && products.length > 0;
 
   const importMessage = importPreview
-    ? `Se agregarán ${String(importPreview.toAdd.length)} y se actualizarán ${String(importPreview.toUpdate.length)} productos.`
+    ? `Se agregarán ${String(importPreview.toAdd.length)}, se actualizarán ${String(importPreview.toUpdate.length)} productos y se sumarán ${String(importPreview.quotesToAdd.length)} cotizaciones.`
     : '';
 
   const importNote =
