@@ -113,3 +113,77 @@ describe('previewImport / applyImport', () => {
     expect(result.errors).toHaveLength(1);
   });
 });
+
+const sampleQuote = {
+  fecha: new Date('2026-09-20T10:00:00.000Z'),
+  items: [
+    {
+      id: 'item-1',
+      productId: 1,
+      nombre: 'ALMENDRA LAMINADA',
+      formato: '11,34',
+      cantidad: 2,
+      precioKg: 9200,
+    },
+  ],
+  totalNeto: 18400,
+  iva: 3496,
+  total: 21896,
+};
+
+const backupV2 = (products: unknown[], quotes: unknown[]) =>
+  JSON.stringify({
+    version: 2,
+    exportedAt: '2026-09-25T12:00:00.000Z',
+    products,
+    quotes,
+  });
+
+describe('backup v2 (products + quotes)', () => {
+  beforeEach(async () => {
+    await db.products.clear();
+    await db.quotes.clear();
+  });
+
+  it('parses quotes from a v2 backup', () => {
+    const { valid, quotes, errors } = parseProductImport(
+      backupV2([validProduct], [sampleQuote])
+    );
+    expect(valid).toHaveLength(1);
+    expect(errors).toHaveLength(0);
+    expect(quotes).toHaveLength(1);
+    expect(quotes[0].items).toHaveLength(1);
+  });
+
+  it('still accepts a legacy v1 bare array (products only)', () => {
+    const { valid, quotes } = parseProductImport(JSON.stringify([validProduct]));
+    expect(valid).toHaveLength(1);
+    expect(quotes).toHaveLength(0);
+  });
+
+  it('adds a quote that this device does not have yet', async () => {
+    const preview = await previewImport(backupV2([], [sampleQuote]));
+    expect(preview.quotesToAdd).toHaveLength(1);
+
+    const result = await applyImport(preview);
+    expect(result.quotesAdded).toBe(1);
+
+    const stored = await db.quotes.toArray();
+    expect(stored).toHaveLength(1);
+    expect(stored[0].total).toBe(21896);
+  });
+
+  it('does not duplicate a quote the device already has (merge by content)', async () => {
+    await applyImport(await previewImport(backupV2([], [sampleQuote])));
+
+    // Same quote again, even with a different id: content match must skip it.
+    const second = await previewImport(backupV2([], [{ ...sampleQuote, id: 999 }]));
+    expect(second.quotesToAdd).toHaveLength(0);
+    expect(await db.quotes.count()).toBe(1);
+  });
+
+  it('preview writes no quotes either', async () => {
+    await previewImport(backupV2([], [sampleQuote]));
+    expect(await db.quotes.count()).toBe(0);
+  });
+});
