@@ -6,10 +6,12 @@ export default defineConfig({
   fullyParallel: false,
   retries: 1,
   webServer: {
-    command: 'source ~/.nvm/nvm.sh && nvm use 22 && pnpm dev --host 0.0.0.0',
+    // Portable: relies on pnpm being on PATH (CI sets it up, local nvm users have it).
+    // The previous `source ~/.nvm/...` failed under `sh`, which Playwright uses.
+    command: 'pnpm dev --host 127.0.0.1',
     port: 5173,
-    reuseExistingServer: true,
-    timeout: 15000,
+    reuseExistingServer: !process.env.CI,
+    timeout: 60000,
   },
   use: {
     baseURL: 'http://localhost:5173',

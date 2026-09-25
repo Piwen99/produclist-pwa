@@ -85,10 +85,10 @@ test.describe('Responsive diagnostics', () => {
       await page.goto(route);
       await page.waitForTimeout(1500);
       
-      const routeInfo = await page.evaluate(() => {
+      const routeInfo = await page.evaluate((r) => {
         const doc = document.documentElement;
         return {
-          route,
+          route: r,
           viewport: { width: doc.clientWidth, height: doc.clientHeight },
           hasHorizontalOverflow: doc.scrollWidth > doc.clientWidth,
           header: (() => {
@@ -111,7 +111,7 @@ test.describe('Responsive diagnostics', () => {
             return culprits;
           })(),
         };
-      });
+      }, route);
       console.log(`\n=== ${route} ===`);
       console.log(`Overflow: ${routeInfo.hasHorizontalOverflow ? '❌ YES' : '✅ No'}`);
       console.log(`Header: ${JSON.stringify(routeInfo.header)}`);
