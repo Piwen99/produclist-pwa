@@ -39,20 +39,89 @@ export function exportToJSON(products: Product[]): void {
 export interface ImportResult {
   success: number;
   updated: number;
-  errors: { nombre: string; error: string }[];
+  errors: ImportError[];
+}
+
+export interface ImportError {
+  nombre: string;
+  error: string;
 }
 
 /**
- * Import products from a JSON file.
- *
- * Strategy: match by product name — if a product with the same name exists,
- * update it; otherwise add it as new. This allows exporting from one device
- * and importing into another without ID conflicts.
+ * A validated import matched against the current catalog, ready to apply.
+ * Building a preview never writes to the database — see `applyImport`.
  */
-export async function importProducts(file: File): Promise<ImportResult> {
-  const text = await file.text();
-  let data: unknown;
+export interface ImportPreview {
+  toAdd: ProductInput[];
+  toUpdate: { id: number; input: ProductInput }[];
+  errors: ImportError[];
+}
 
+/**
+ * Validate one raw entry of an import file.
+ * Returns a `ProductInput` when valid, or an `ImportError` describing the problem.
+ */
+function parseImportItem(raw: unknown): ProductInput | ImportError {
+  if (typeof raw !== 'object' || raw === null) {
+    return { nombre: '(entrada inválida)', error: 'Cada entrada debe ser un objeto.' };
+  }
+
+  const item = raw as Record<string, unknown>;
+
+  const rawNombre = item.nombre;
+  if (typeof rawNombre !== 'string' || rawNombre.trim() === '') {
+    return { nombre: '(sin nombre)', error: 'Campo "nombre" obligatorio.' };
+  }
+  const nombre = rawNombre.trim();
+
+  const rawCategoria = item.categoria;
+  if (
+    typeof rawCategoria !== 'string' ||
+    !CATEGORY_VALUES.includes(rawCategoria as Category)
+  ) {
+    return {
+      nombre,
+      error: `Categoría inválida "${typeof rawCategoria === 'string' ? rawCategoria : ''}". Debe ser una de: ${CATEGORY_VALUES.join(', ')}.`,
+    };
+  }
+
+  const formato = typeof item.formato === 'string' ? item.formato : '';
+  if (formato && !isValidChileanFormat(formato)) {
+    return {
+      nombre,
+      error: `Formato inválido "${formato}". Use formato chileno (ej: 11,34).`,
+    };
+  }
+
+  const rawPrecioNeto = item.precioNeto;
+  const precioNeto =
+    typeof rawPrecioNeto === 'number' ? rawPrecioNeto : Number(rawPrecioNeto);
+  if (!Number.isFinite(precioNeto) || precioNeto < 0) {
+    return {
+      nombre,
+      error: 'El precio neto debe ser un número mayor o igual a 0.',
+    };
+  }
+
+  return {
+    nombre,
+    categoria: rawCategoria as Category,
+    formato,
+    precioNeto,
+    disponible: item.disponible !== false,
+  };
+}
+
+/**
+ * Parse and validate the text of a JSON import file.
+ * Pure: no database access, nothing is written. Throws only when the file is
+ * not valid JSON or is not an array.
+ */
+export function parseProductImport(text: string): {
+  valid: ProductInput[];
+  errors: ImportError[];
+} {
+  let data: unknown;
   try {
     data = JSON.parse(text);
   } catch {
@@ -63,78 +132,71 @@ export async function importProducts(file: File): Promise<ImportResult> {
     throw new Error('El archivo debe contener un arreglo de productos.');
   }
 
-  const result: ImportResult = { success: 0, updated: 0, errors: [] };
+  const valid: ProductInput[] = [];
+  const errors: ImportError[] = [];
 
-  for (const item of data) {
-    const raw = item as Record<string, unknown>;
-
-    // Validate required fields
-    if (!raw.nombre || typeof raw.nombre !== 'string') {
-      result.errors.push({ nombre: '(sin nombre)', error: 'Campo "nombre" obligatorio.' });
-      continue;
+  for (const entry of data) {
+    const parsed = parseImportItem(entry);
+    if ('error' in parsed) {
+      errors.push(parsed);
+    } else {
+      valid.push(parsed);
     }
+  }
 
-    if (!raw.categoria || typeof raw.categoria !== 'string') {
-      const name = typeof raw.nombre === 'string' ? raw.nombre : '(sin nombre)';
-      result.errors.push({ nombre: name, error: 'Campo "categoria" obligatorio.' });
-      continue;
+  return { valid, errors };
+}
+
+/**
+ * Match a validated import against the current catalog WITHOUT writing anything.
+ *
+ * Strategy: match by product name — if a product with the same name exists it
+ * will be updated; otherwise it will be added. This allows exporting from one
+ * device and importing into another without ID conflicts, and lets the UI show
+ * exactly how many products would be overwritten before anything is applied.
+ */
+export async function previewImport(text: string): Promise<ImportPreview> {
+  const { valid, errors } = parseProductImport(text);
+  const toAdd: ProductInput[] = [];
+  const toUpdate: { id: number; input: ProductInput }[] = [];
+
+  for (const input of valid) {
+    const existing = await db.products.where('nombre').equals(input.nombre).first();
+    if (existing && existing.id) {
+      toUpdate.push({ id: existing.id, input });
+    } else {
+      toAdd.push(input);
     }
+  }
 
-    const rawNombre = raw.nombre;
-    const rawCategoria = raw.categoria;
-    const rawFormato = raw.formato;
-    const rawPrecioNeto = raw.precioNeto;
+  return { toAdd, toUpdate, errors };
+}
 
-    const nombre = typeof rawNombre === 'string' ? rawNombre.trim() : '';
-    const categoria = rawCategoria as string;
-    const formato = typeof rawFormato === 'string' ? rawFormato : '';
+/**
+ * Apply a preview. This is the only import step that writes to the database.
+ */
+export async function applyImport(preview: ImportPreview): Promise<ImportResult> {
+  const result: ImportResult = { success: 0, updated: 0, errors: [...preview.errors] };
 
-    // Categoria must belong to the known set — otherwise the product is
-    // persisted but never rendered (lists only iterate known categories).
-    if (!CATEGORY_VALUES.includes(categoria as Category)) {
-      result.errors.push({
-        nombre,
-        error: `Categoría inválida "${categoria}". Debe ser una de: ${CATEGORY_VALUES.join(', ')}.`,
-      });
-      continue;
-    }
-
-    // Formato must be a valid Chilean number when provided (empty is ok).
-    if (formato && !isValidChileanFormat(formato)) {
-      result.errors.push({
-        nombre,
-        error: `Formato inválido "${formato}". Use formato chileno (ej: 11,34).`,
-      });
-      continue;
-    }
-
-    const productInput: ProductInput = {
-      nombre,
-      categoria: categoria as ProductInput['categoria'],
-      formato,
-      precioNeto: typeof rawPrecioNeto === 'number' ? rawPrecioNeto : Number(rawPrecioNeto) || 0,
-      disponible: raw.disponible !== false,
-    };
-
+  for (const { id, input } of preview.toUpdate) {
     try {
-      // Match by name: check if a product with this name already exists
-      const existing = await db.products
-        .where('nombre')
-        .equals(productInput.nombre)
-        .first();
-
-      if (existing && existing.id) {
-        // Update existing product
-        await db.products.update(existing.id, productInput);
-        result.updated++;
-      } else {
-        // Add new product
-        await addProduct(productInput);
-        result.success++;
-      }
+      await db.products.update(id, input);
+      result.updated++;
     } catch (err) {
       result.errors.push({
-        nombre: productInput.nombre,
+        nombre: input.nombre,
+        error: err instanceof Error ? err.message : 'Error desconocido.',
+      });
+    }
+  }
+
+  for (const input of preview.toAdd) {
+    try {
+      await addProduct(input);
+      result.success++;
+    } catch (err) {
+      result.errors.push({
+        nombre: input.nombre,
         error: err instanceof Error ? err.message : 'Error desconocido.',
       });
     }
