@@ -1,8 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { Cotizador } from '../Cotizador';
 import { ToastProvider } from '../../hooks/ToastProvider';
 import type { QuoteItem } from '../../types/quote';
+
+vi.mock('@react-pdf/renderer', () => ({
+  Document: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Page: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  View: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+  StyleSheet: { create: (s: unknown) => s },
+  PDFDownloadLink: ({
+    children,
+  }: {
+    children: (state: { loading: boolean; error: Error | null }) => ReactNode;
+  }) => children({ loading: false, error: null }),
+}));
 
 const mockHandlers = {
   onAddProduct: vi.fn(),
@@ -89,5 +103,20 @@ describe('Cotizador', () => {
   it('should render Guardar cotización button', () => {
     renderCotizador();
     expect(screen.getByRole('button', { name: /guardar cotización/i })).toBeInTheDocument();
+  });
+
+  it('should render the PDF trigger disabled when there are no items', async () => {
+    renderCotizador();
+    const pdfButton = await screen.findByRole('button', { name: /exportar pdf/i });
+    expect(pdfButton).toBeDisabled();
+  });
+
+  it('should enable the PDF trigger once there are items', async () => {
+    const items: QuoteItem[] = [
+      { id: 'item-1', productId: 1, nombre: 'Almendra', formato: '11,34', cantidad: 1, precioKg: 100 },
+    ];
+    renderCotizador(items, { totalKg: 11.34, subtotal: 1134, iva: 215, total: 1349 });
+    const pdfButton = await screen.findByRole('button', { name: /exportar pdf/i });
+    expect(pdfButton).not.toBeDisabled();
   });
 });

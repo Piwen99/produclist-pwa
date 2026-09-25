@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { QuoteItem } from './QuoteItem';
 import { QuoteProductSelector } from './QuoteProductSelector';
 import { QuoteShareButton } from './QuoteShareButton';
+import { QuotePDFButton } from './QuotePDFButton';
 import { saveQuote, getClientNames } from '../db/database';
 import { useToast } from '../hooks/useToast';
 import type { QuoteItem as QuoteItemType, QuoteTotals } from '../types/quote';
@@ -134,9 +135,15 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
         </div>
       </div>
 
-      {/* Share button */}
-      <div className="mt-4">
+      {/* Share + export actions */}
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-start">
         <QuoteShareButton items={items} totals={totals} />
+        <QuotePDFButton
+          items={items}
+          totals={totals}
+          cliente={cliente}
+          disabled={items.length === 0}
+        />
       </div>
 
       {/* Client (optional) */}
