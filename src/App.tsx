@@ -15,7 +15,10 @@ import { Cotizador } from './components/Cotizador';
 import { QuoteHistory } from './components/QuoteHistory';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { BackupReminder } from './components/BackupReminder';
+import { ListSendForm } from './components/ListSendForm';
 import { exportBackup, previewImport, applyImport, type ImportPreview } from './utils/exportImport';
+import { buildListSendItems } from './utils/listSend';
+import { saveListSend, getClientNames } from './db/database';
 import type { Product, ProductInput } from './types/product';
 import './App.css';
 
@@ -32,6 +35,8 @@ function App() {
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [showListSendForm, setShowListSendForm] = useState(false);
+  const [clientNames, setClientNames] = useState<string[]>([]);
 
   // Cotizador state
   const { items, addItem, removeItem, updateItemQty, updateItemPrecioKg, totals } = useQuote();
@@ -117,6 +122,28 @@ function App() {
     void exportBackup(products);
   }, [products]);
 
+  const handleOpenListSend = useCallback(() => {
+    void getClientNames().then(setClientNames).catch(console.error);
+    setShowListSendForm(true);
+  }, []);
+
+  const handleSaveListSend = useCallback(async (cliente: string) => {
+    setShowListSendForm(false);
+    if (!products) return;
+
+    try {
+      await saveListSend({ cliente, items: buildListSendItems(products) });
+      toast.success(`Lista enviada a ${cliente} guardada.`);
+    } catch (error) {
+      console.error('Error saving list send:', error);
+      toast.error('No se pudo guardar la lista enviada.');
+    }
+  }, [products, toast]);
+
+  const handleCancelListSend = useCallback(() => {
+    setShowListSendForm(false);
+  }, []);
+
   const handleImportClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
@@ -185,6 +212,7 @@ function App() {
   }, []);
 
   const hasProducts = products && products.length > 0;
+  const listSendProductCount = products ? buildListSendItems(products).length : 0;
 
   const importMessage = importPreview
     ? `Se agregarán ${String(importPreview.toAdd.length)}, se actualizarán ${String(importPreview.toUpdate.length)} productos y se sumarán ${String(importPreview.quotesToAdd.length)} cotizaciones.`
@@ -234,6 +262,16 @@ function App() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                       </svg>
                       Importar
+                    </button>
+                    <button
+                      onClick={() => { handleOpenListSend(); setShowMobileMenu(false); }}
+                      disabled={!hasProducts}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Guardar lista enviada
                     </button>
                   </div>
                 )}
@@ -360,6 +398,16 @@ function App() {
         onConfirm={() => { void handleConfirmImport(); }}
         onCancel={handleCancelImport}
       />
+
+      {/* Save the price list sent to a client */}
+      {showListSendForm && (
+        <ListSendForm
+          productCount={listSendProductCount}
+          clients={clientNames}
+          onSave={(cliente) => { void handleSaveListSend(cliente); }}
+          onCancel={handleCancelListSend}
+        />
+      )}
 
       {/* Footer spacer for mobile */}
       <div className="h-20 sm:h-24" aria-hidden="true" />

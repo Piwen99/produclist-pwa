@@ -1,11 +1,13 @@
 import Dexie, { type Table } from 'dexie';
 import type { Product, ProductInput } from '../types/product';
 import type { QuoteItem } from '../types/quote';
+import type { ListSend } from '../types/listSend';
 
 export class ProduclistDB extends Dexie {
   products!: Table<Product>;
   quotes!: Table<SavedQuote>;
   drafts!: Table<QuoteDraft>;
+  listSends!: Table<ListSend>;
 
   constructor() {
     super('ProduclistDB');
@@ -22,12 +24,22 @@ export class ProduclistDB extends Dexie {
       // Borrador único de cotización (autosave). Una sola fila con clave fija.
       drafts: 'id'
     });
+    this.version(4).stores({
+      products: '++id, nombre, categoria, disponible',
+      // `cliente` es opcional y texto libre: las filas viejas simplemente no lo tienen.
+      quotes: '++id, fecha, cliente',
+      drafts: 'id',
+      // Listas de precios enviadas a un cliente (snapshot con nombre).
+      listSends: '++id, fecha, cliente'
+    });
   }
 }
 
 export interface SavedQuote {
   id?: number;
   fecha: Date;
+  /** Free text typed by the user; optional. */
+  cliente?: string;
   items: QuoteItem[];
   totalNeto: number;
   iva: number;
@@ -120,6 +132,7 @@ export async function saveQuote(
 ): Promise<number> {
   const id = await db.quotes.add({
     fecha: data.fecha ?? new Date(),
+    cliente: data.cliente,
     items: data.items,
     totalNeto: data.totalNeto,
     iva: data.iva,
@@ -167,4 +180,59 @@ export async function loadQuoteDraft(): Promise<QuoteDraft | undefined> {
  */
 export async function clearQuoteDraft(): Promise<void> {
   await db.drafts.delete(DRAFT_KEY);
+}
+
+// ── Listas enviadas a clientes ─────────────────────────────────────────────
+
+/**
+ * Save a snapshot of the price list sent to a client.
+ */
+export async function saveListSend(
+  data: Omit<ListSend, 'id' | 'fecha'> & { fecha?: Date }
+): Promise<number> {
+  const id = (await db.listSends.add({
+    fecha: data.fecha ?? new Date(),
+    cliente: data.cliente,
+    items: data.items,
+  })) as number;
+  return id;
+}
+
+/**
+ * Get all list sends ordered by fecha descending (newest first).
+ */
+export async function getAllListSends(): Promise<ListSend[]> {
+  const sends = await db.listSends.orderBy('fecha').toArray();
+  return sends.reverse();
+}
+
+/**
+ * Delete a list send by id.
+ */
+export async function deleteListSend(id: number): Promise<void> {
+  await db.listSends.delete(id);
+}
+
+/**
+ * Every client name used so far, from saved quotes and list sends, de-duplicated
+ * case-insensitively and sorted. Feeds the autocomplete on the client input.
+ */
+export async function getClientNames(): Promise<string[]> {
+  const [quotes, sends] = await Promise.all([
+    db.quotes.toArray(),
+    db.listSends.toArray(),
+  ]);
+
+  const byKey = new Map<string, string>();
+  for (const cliente of [
+    ...quotes.map((quote) => quote.cliente),
+    ...sends.map((send) => send.cliente),
+  ]) {
+    const name = cliente?.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (!byKey.has(key)) byKey.set(key, name);
+  }
+
+  return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'es'));
 }
