@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { ConfirmDialog } from '../ConfirmDialog';
 
 const defaultProps = {
@@ -103,5 +104,57 @@ describe('ConfirmDialog', () => {
     vi.advanceTimersToNextTimer();
     expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveFocus();
     vi.useRealTimers();
+  });
+
+  it('exposes dialog semantics with the title as accessible name', () => {
+    renderDialog();
+    const dialog = screen.getByRole('dialog', { name: 'Eliminar producto' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'confirm-dialog-title');
+  });
+
+  it('traps focus between the dialog buttons', async () => {
+    const user = userEvent.setup();
+    renderDialog();
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveFocus()
+    );
+
+    await user.tab({ shift: true });
+    expect(screen.getByRole('button', { name: 'Eliminar' })).toHaveFocus();
+
+    await user.tab();
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveFocus();
+  });
+
+  it('returns focus to the trigger when closed', async () => {
+    const user = userEvent.setup();
+
+    function Wrapper() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>Abrir</button>
+          <ConfirmDialog
+            {...defaultProps}
+            isOpen={open}
+            onCancel={() => setOpen(false)}
+          />
+        </>
+      );
+    }
+
+    render(<Wrapper />);
+    const trigger = screen.getByRole('button', { name: 'Abrir' });
+    await user.click(trigger);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveFocus()
+    );
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

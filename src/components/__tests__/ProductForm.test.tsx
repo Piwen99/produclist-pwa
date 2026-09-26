@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { ProductForm } from '../ProductForm';
 import type { Product } from '../../types/product';
 
@@ -224,5 +225,68 @@ describe('ProductForm — precio bruto display', () => {
 
     // 10000 * 1.19 = 11900 → $11.900
     expect(screen.getByText('$11.900')).toBeInTheDocument();
+  });
+});
+
+describe('ProductForm — modal accessibility', () => {
+  it('exposes dialog semantics with the title as accessible name', () => {
+    renderForm();
+
+    const dialog = screen.getByRole('dialog', { name: 'Nuevo Producto' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'product-form-title');
+  });
+
+  it('uses the edit title as accessible name in edit mode', () => {
+    renderForm(mockProduct);
+
+    expect(
+      screen.getByRole('dialog', { name: 'Editar Producto' })
+    ).toBeInTheDocument();
+  });
+
+  it('focuses the first field on open', async () => {
+    renderForm();
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(/nombre/i)).toHaveFocus()
+    );
+  });
+
+  it('closes on Escape', async () => {
+    const user = userEvent.setup();
+    const { onCancel } = renderForm();
+
+    await user.keyboard('{Escape}');
+
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('returns focus to the trigger when closed', async () => {
+    const user = userEvent.setup();
+
+    function Wrapper() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>Abrir</button>
+          {open && (
+            <ProductForm onSubmit={vi.fn()} onCancel={() => setOpen(false)} />
+          )}
+        </>
+      );
+    }
+
+    render(<Wrapper />);
+    const trigger = screen.getByRole('button', { name: 'Abrir' });
+    await user.click(trigger);
+    await waitFor(() =>
+      expect(screen.getByLabelText(/nombre/i)).toHaveFocus()
+    );
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

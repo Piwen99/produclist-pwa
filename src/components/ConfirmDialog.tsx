@@ -1,4 +1,5 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useRef, useCallback } from 'react';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -27,23 +28,12 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const cancelRef = useRef<HTMLButtonElement>(null);
 
-  // Auto-focus cancel button on open
-  useEffect(() => {
-    if (isOpen) {
-      // Small delay to ensure the modal is in the DOM
-      requestAnimationFrame(() => cancelRef.current?.focus());
-    }
-  }, [isOpen]);
-
-  // Handle Escape key
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onCancel();
-      }
-    },
-    [onCancel]
-  );
+  // Focus trap, Escape handling, initial focus and focus restore.
+  const { containerRef } = useModalA11y<HTMLDivElement>({
+    active: isOpen,
+    onClose: onCancel,
+    initialFocusRef: cancelRef,
+  });
 
   // Handle click outside (on the overlay)
   const handleOverlayClick = useCallback(
@@ -59,9 +49,9 @@ export function ConfirmDialog({
 
   return (
     <div
+      ref={containerRef}
       className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
       onClick={handleOverlayClick}
-      onKeyDown={handleKeyDown}
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
