@@ -110,4 +110,34 @@ describe('QuoteProductSelector', () => {
     expect(screen.getByText('Almendras')).toBeInTheDocument();
     expect(screen.getByText('Chía')).toBeInTheDocument();
   });
+
+  it('should expose dialog semantics with the title as accessible name', () => {
+    setup();
+
+    const dialog = screen.getByRole('dialog', { name: 'Seleccionar Producto' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'quote-selector-title');
+  });
+
+  it('should render a single "Seleccionar Producto" heading inside the dialog', () => {
+    setup();
+
+    const headings = screen.getAllByRole('heading', { name: 'Seleccionar Producto' });
+    expect(headings).toHaveLength(1);
+
+    const dialog = screen.getByRole('dialog', { name: 'Seleccionar Producto' });
+    expect(dialog).toContainElement(headings[0]);
+  });
+
+  it('should render the close button inside the dialog and call onClose when clicked', () => {
+    setup();
+
+    const dialog = screen.getByRole('dialog', { name: 'Seleccionar Producto' });
+    const closeButton = screen.getByRole('button', { name: 'Cerrar' });
+
+    expect(dialog).toContainElement(closeButton);
+
+    fireEvent.click(closeButton);
+    expect(mockOnClose).toHaveBeenCalledTimes(1);
+  });
 });

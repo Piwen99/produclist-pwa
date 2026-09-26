@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { Cotizador } from '../Cotizador';
 import { ToastProvider } from '../../hooks/ToastProvider';
@@ -47,7 +48,9 @@ describe('Cotizador', () => {
   it('should open product selector modal when "Agregar producto" button is clicked', () => {
     renderCotizador();
     fireEvent.click(screen.getByRole('button', { name: /agregar producto/i }));
-    expect(screen.getByText('Seleccionar Producto')).toBeInTheDocument();
+    // Exactly one heading: the dialog owns its title, Cotizador no longer renders one.
+    const headings = screen.getAllByRole('heading', { name: 'Seleccionar Producto' });
+    expect(headings).toHaveLength(1);
   });
 
   it('should render empty state when no items', () => {
@@ -118,5 +121,35 @@ describe('Cotizador', () => {
     renderCotizador(items, { totalKg: 11.34, subtotal: 1134, iva: 215, total: 1349 });
     const pdfButton = await screen.findByRole('button', { name: /exportar pdf/i });
     expect(pdfButton).not.toBeDisabled();
+  });
+
+  it('exposes an accessible product-selector dialog and restores focus on Escape', async () => {
+    const user = userEvent.setup();
+    renderCotizador();
+
+    const trigger = screen.getByRole('button', { name: /agregar producto/i });
+    await user.click(trigger);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Seleccionar Producto' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'quote-selector-title');
+
+    // The dialog owns its close button, so it lives inside the focus trap.
+    const closeButton = screen.getByRole('button', { name: 'Cerrar' });
+    expect(dialog).toContainElement(closeButton);
+
+    // Initial focus lands on the search input; Shift+Tab walks back to the
+    // close button, proving it is reachable through the dialog's tab order.
+    const searchInput = await screen.findByRole('textbox', { name: 'Buscar productos' });
+    await waitFor(() => expect(searchInput).toHaveFocus());
+    await user.tab({ shift: true });
+    expect(closeButton).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    );
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 });
