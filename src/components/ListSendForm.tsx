@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface ListSendFormProps {
   /** How many products the snapshot will contain */
@@ -16,15 +17,20 @@ export function ListSendForm({ productCount, clients, onSave, onCancel }: ListSe
   const [cliente, setCliente] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  // Focus trap, Escape handling, initial focus and focus restore. The modal is
+  // conditionally mounted, so it stays active for its whole lifetime.
+  const { containerRef } = useModalA11y<HTMLDivElement>({
+    active: true,
+    onClose: onCancel,
+    initialFocusRef: inputRef,
+  });
 
   const trimmed = cliente.trim();
   const canSave = trimmed.length > 0 && productCount > 0;
 
   return (
     <div
+      ref={containerRef}
       className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
       role="dialog"
       aria-modal="true"

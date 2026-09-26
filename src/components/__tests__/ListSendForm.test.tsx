@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { ListSendForm } from '../ListSendForm';
 
 describe('ListSendForm', () => {
@@ -38,5 +39,54 @@ describe('ListSendForm', () => {
     await userEvent.click(screen.getByRole('button', { name: /cancelar/i }));
 
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  it('exposes dialog semantics with the title as accessible name', () => {
+    render(<ListSendForm productCount={3} clients={[]} onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    const dialog = screen.getByRole('dialog', { name: 'Guardar lista enviada' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-labelledby', 'list-send-title');
+  });
+
+  it('focuses the client input and closes on Escape', async () => {
+    const onCancel = vi.fn();
+    render(<ListSendForm productCount={3} clients={[]} onSave={vi.fn()} onCancel={onCancel} />);
+
+    await waitFor(() => expect(screen.getByLabelText(/cliente/i)).toHaveFocus());
+
+    await userEvent.keyboard('{Escape}');
+    expect(onCancel).toHaveBeenCalledOnce();
+  });
+
+  it('returns focus to the trigger when unmounted', async () => {
+    const user = userEvent.setup();
+
+    function Wrapper() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>Abrir</button>
+          {open && (
+            <ListSendForm
+              productCount={3}
+              clients={[]}
+              onSave={vi.fn()}
+              onCancel={() => setOpen(false)}
+            />
+          )}
+        </>
+      );
+    }
+
+    render(<Wrapper />);
+    const trigger = screen.getByRole('button', { name: 'Abrir' });
+    await user.click(trigger);
+    await waitFor(() => expect(screen.getByLabelText(/cliente/i)).toHaveFocus());
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(trigger).toHaveFocus());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

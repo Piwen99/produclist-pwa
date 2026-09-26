@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { Product, ProductInput, Category } from '../types/product';
 import { calcPrecioBruto, isValidChileanFormat } from '../utils/price';
+import { useModalA11y } from '../hooks/useModalA11y';
 
 interface ProductFormProps {
   product?: Product;
@@ -33,6 +34,10 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
   );
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Focus trap, Escape handling, initial focus and focus restore. The modal is
+  // conditionally mounted, so it stays active for its whole lifetime.
+  const { containerRef } = useModalA11y<HTMLDivElement>({ active: true, onClose: onCancel });
 
   const validate = useCallback((): boolean => {
     const newErrors: Record<string, string> = {};
@@ -84,10 +89,19 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+    <div
+      ref={containerRef}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="product-form-title"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="p-4 sm:p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          <h2
+            id="product-form-title"
+            className="text-lg font-semibold text-gray-900 dark:text-white mb-4"
+          >
             {isEditing ? 'Editar Producto' : 'Nuevo Producto'}
           </h2>
 
