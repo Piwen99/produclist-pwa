@@ -219,12 +219,19 @@ describe('ProductForm — precio bruto display', () => {
     const user = userEvent.setup();
     renderForm();
 
+    // Let the modal's deferred initial focus land on `nombre` before touching
+    // any other field. Otherwise a late requestAnimationFrame can steal focus
+    // mid-typing and the keystrokes land in `nombre` instead of `precioNeto`.
+    await waitFor(() =>
+      expect(screen.getByLabelText(/nombre/i)).toHaveFocus()
+    );
+
     const precioInput = screen.getByLabelText(/precio neto/i);
     await user.clear(precioInput);
     await user.type(precioInput, '10000');
 
     // 10000 * 1.19 = 11900 → $11.900
-    expect(screen.getByText('$11.900')).toBeInTheDocument();
+    expect(await screen.findByText('$11.900')).toBeInTheDocument();
   });
 });
 
