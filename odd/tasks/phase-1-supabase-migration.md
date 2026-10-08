@@ -605,8 +605,8 @@ run for T6–T12.
   plus two regression tests that interleave a pending `getSession()` with an emitted
   session; `pnpm coverage` 344 green; the targeted validator admitted → `state:
   approved`; authority burned.
-- **Branch / PR**: `feat/auth-ui`, PR4, base = the synced tracker branch
-  `feat/phase-1-supabase-migration`. Not pushed yet (pending user decision).
+- **Branch / PR**: `feat/auth-ui` → **PR #43**, base = the synced tracker branch
+  `feat/phase-1-supabase-migration`.
 - **Commit**: `37566acf43c0d3c721dc043cc474372239a2d4fa` —
   `feat(auth): gate the app behind Supabase login`.
 
