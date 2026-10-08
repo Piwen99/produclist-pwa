@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/database';
+import { useData } from '../data/useData';
 import { formatCurrency } from '../utils/price';
 import { useModalA11y } from '../hooks/useModalA11y';
 import type { Product } from '../types/product';
@@ -11,16 +10,13 @@ interface QuoteProductSelectorProps {
 }
 
 export function QuoteProductSelector({ onSelect, onClose }: QuoteProductSelectorProps) {
-  const products = useLiveQuery(
-    () => db.products.toArray(),
-    []
-  );
+  const { products } = useData();
 
   return <QuoteSelectorDialog products={products} onSelect={onSelect} onClose={onClose} />;
 }
 
 interface QuoteSelectorDialogProps {
-  /** Undefined while the Dexie query is still resolving. */
+  /** Undefined while the first load is still resolving. */
   products: Product[] | undefined;
   onSelect: (product: Product) => void;
   onClose: () => void;

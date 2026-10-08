@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useQuote } from '../useQuote';
-import { loadQuoteDraft, saveQuoteDraft, clearQuoteDraft } from '../../db/database';
+import { createLocalDraftsRepo } from '../../data/local/draftsRepo';
 import type { Product } from '../../types/product';
 import type { QuoteItem } from '../../types/quote';
 
@@ -278,12 +278,13 @@ describe('useQuote', () => {
   });
 
   describe('draft autosave', () => {
-    beforeEach(async () => {
-      await clearQuoteDraft();
+    beforeEach(() => {
+      localStorage.clear();
     });
 
     afterEach(() => {
       vi.useRealTimers();
+      localStorage.clear();
     });
 
     it('starts empty when no draft exists', async () => {
@@ -295,7 +296,7 @@ describe('useQuote', () => {
       const draftItems: QuoteItem[] = [
         { id: 'draft-item-1', productId: 7, nombre: 'PISTACHO PELADO', formato: '10', cantidad: 3, precioKg: 25000 },
       ];
-      await saveQuoteDraft({ items: draftItems, totalNeto: 750000, iva: 142500, total: 892500 });
+      createLocalDraftsRepo().save({ items: draftItems, totalNeto: 750000, iva: 142500, total: 892500 });
 
       const { result } = renderHook(() => useQuote());
 
@@ -313,8 +314,8 @@ describe('useQuote', () => {
         result.current.addItem(createMockProduct({ id: 1, nombre: 'Chía' }));
       });
 
-      await waitFor(async () => {
-        const draft = await loadQuoteDraft();
+      await waitFor(() => {
+        const draft = createLocalDraftsRepo().load();
         expect(draft?.items).toHaveLength(1);
         expect(draft?.items[0].nombre).toBe('Chía');
       }, { timeout: 4000 });
@@ -326,16 +327,32 @@ describe('useQuote', () => {
       act(() => {
         result.current.addItem(createMockProduct({ id: 1, nombre: 'Chía' }));
       });
-      await waitFor(async () => {
-        expect(await loadQuoteDraft()).toBeDefined();
+      await waitFor(() => {
+        expect(createLocalDraftsRepo().load()).not.toBeNull();
       }, { timeout: 4000 });
 
       act(() => {
         result.current.clearAll();
       });
-      await waitFor(async () => {
-        expect(await loadQuoteDraft()).toBeUndefined();
+      await waitFor(() => {
+        expect(createLocalDraftsRepo().load()).toBeNull();
       }, { timeout: 4000 });
+    });
+
+    it('restores the draft after a remount (a fresh repo over the same storage)', async () => {
+      const first = renderHook(() => useQuote());
+      act(() => {
+        first.result.current.addItem(createMockProduct({ id: 1, nombre: 'Castañas' }));
+      });
+      await waitFor(() => {
+        expect(createLocalDraftsRepo().load()?.items[0]?.nombre).toBe('Castañas');
+      }, { timeout: 4000 });
+      first.unmount();
+
+      const second = renderHook(() => useQuote());
+      await waitFor(() => {
+        expect(second.result.current.items[0]?.nombre).toBe('Castañas');
+      });
     });
   });
 });

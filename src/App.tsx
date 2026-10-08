@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Routes, Route, NavLink } from 'react-router-dom';
-import { seedDatabase } from './db/seed';
 import { useProducts } from './hooks/useProducts';
 import { useAddProduct } from './hooks/useAddProduct';
 import { useUpdateProduct } from './hooks/useUpdateProduct';
@@ -56,11 +55,6 @@ function App() {
     }
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showMobileMenu]);
-
-  // Seed database on mount
-  useEffect(() => {
-    seedDatabase().catch(console.error);
-  }, []);
 
   const handleAddNew = useCallback(() => {
     setShowForm(true);

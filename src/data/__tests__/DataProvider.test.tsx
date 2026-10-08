@@ -130,6 +130,36 @@ describe('DataProvider', () => {
     expect(errorSpy).toHaveBeenCalled();
   });
 
+  it('keeps the newest snapshot when refreshes resolve out of order', async () => {
+    const older = deferred<Product[]>();
+    const newer = deferred<Product[]>();
+    const list = vi
+      .fn<ProductsRepo['list']>()
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+    renderProbe({ products: createRepo({ list }) });
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+
+    // The newer request resolves first...
+    await act(async () => {
+      newer.resolve([P1, { ...P1, id: 2, nombre: 'Nueces' }]);
+      await newer.promise;
+    });
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('2'));
+
+    // ...then the stale one lands late and must not overwrite it.
+    await act(async () => {
+      older.resolve([P1]);
+      await older.promise;
+    });
+    expect(screen.getByTestId('count')).toHaveTextContent('2');
+  });
+
   it('refreshes when the document becomes visible', async () => {
     const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
     renderProbe({ products: createRepo({ list }) });

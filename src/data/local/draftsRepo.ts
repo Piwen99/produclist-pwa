@@ -23,8 +23,11 @@ export function createLocalDraftsRepo(
       const raw = storage.getItem(key);
       if (raw === null) return null;
       try {
-        const parsed = JSON.parse(raw) as Omit<QuoteDraft, 'id'>;
-        return { id: 'draft', ...parsed };
+        const parsed: unknown = JSON.parse(raw);
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          return null;
+        }
+        return { id: 'draft', ...(parsed as Omit<QuoteDraft, 'id'>) };
       } catch {
         return null;
       }

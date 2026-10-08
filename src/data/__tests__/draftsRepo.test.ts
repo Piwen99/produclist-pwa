@@ -82,6 +82,17 @@ describe('createLocalDraftsRepo', () => {
     expect(createLocalDraftsRepo().load()).toBeNull();
   });
 
+  it.each([
+    ['null', 'null'],
+    ['a number', '42'],
+    ['a string', '"draft"'],
+    ['an array', '[]'],
+  ])('returns null for parseable non-object payload (%s)', (_label, payload) => {
+    localStorage.setItem(DRAFT_STORAGE_KEY, payload);
+
+    expect(createLocalDraftsRepo().load()).toBeNull();
+  });
+
   it('honors a custom storage and key', () => {
     const storage = createMemoryStorage();
     const repo = createLocalDraftsRepo(storage, 'custom:key');
