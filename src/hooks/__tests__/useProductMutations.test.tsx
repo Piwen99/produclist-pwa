@@ -50,6 +50,14 @@ function createRepo(overrides: Partial<ProductsRepo> = {}): ProductsRepo {
   };
 }
 
+/** A full port set whose products repo is the given mock; the rest are inert. */
+function withProducts(products: ProductsRepo): Repositories {
+  return {
+    ...createInMemoryRepositories({ userId: 'user-1', isAdmin: false }),
+    products,
+  };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
@@ -58,7 +66,7 @@ describe('product mutation hooks', () => {
   it('adds through the repo, resolves to the created id and refreshes the cache', async () => {
     const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
     const create = vi.fn<ProductsRepo['create']>().mockResolvedValue(P1);
-    const repos: Repositories = { products: createRepo({ list, create }) };
+    const repos: Repositories = withProducts(createRepo({ list, create }));
     const { result } = renderHook(() => useProductsAndMutations(), {
       wrapper: wrapperFor(repos),
     });
@@ -78,7 +86,7 @@ describe('product mutation hooks', () => {
   it('updates through the repo and refreshes the cache', async () => {
     const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
     const update = vi.fn<ProductsRepo['update']>().mockResolvedValue(undefined);
-    const repos: Repositories = { products: createRepo({ list, update }) };
+    const repos: Repositories = withProducts(createRepo({ list, update }));
     const { result } = renderHook(() => useProductsAndMutations(), {
       wrapper: wrapperFor(repos),
     });
@@ -96,7 +104,7 @@ describe('product mutation hooks', () => {
   it('deletes through the repo and refreshes the cache', async () => {
     const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
     const remove = vi.fn<ProductsRepo['remove']>().mockResolvedValue(undefined);
-    const repos: Repositories = { products: createRepo({ list, remove }) };
+    const repos: Repositories = withProducts(createRepo({ list, remove }));
     const { result } = renderHook(() => useProductsAndMutations(), {
       wrapper: wrapperFor(repos),
     });
@@ -116,7 +124,7 @@ describe('product mutation hooks', () => {
     const create = vi
       .fn<ProductsRepo['create']>()
       .mockRejectedValue(new Error('Ya existe un producto llamado "Nueces"'));
-    const repos: Repositories = { products: createRepo({ create }) };
+    const repos: Repositories = withProducts(createRepo({ create }));
     const { result } = renderHook(() => useProductsAndMutations(), {
       wrapper: wrapperFor(repos),
     });

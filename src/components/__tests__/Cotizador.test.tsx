@@ -34,19 +34,18 @@ const catalogSeed: ProductInput[] = [
 ];
 
 function renderCotizador(items: QuoteItem[] = [], totals = { totalKg: 0, subtotal: 0, iva: 0, total: 0 }) {
-  return render(
+  const repos = createInMemoryRepositories(
+    { userId: 'test-user', isAdmin: false },
+    catalogSeed,
+  );
+  const view = render(
     <ToastProvider>
-      <DataProvider
-        repos={createInMemoryRepositories(
-          { userId: 'test-user', isAdmin: false },
-          catalogSeed,
-        )}
-        userId="test-user"
-      >
+      <DataProvider repos={repos} userId="test-user">
         <Cotizador items={items} totals={totals} {...mockHandlers} />
       </DataProvider>
     </ToastProvider>
   );
+  return { repos, ...view };
 }
 
 describe('Cotizador', () => {
@@ -121,6 +120,22 @@ describe('Cotizador', () => {
   it('should render Guardar cotización button', () => {
     renderCotizador();
     expect(screen.getByRole('button', { name: /guardar cotización/i })).toBeInTheDocument();
+  });
+
+  it('saves a quote through the quotes repository', async () => {
+    const items: QuoteItem[] = [
+      { id: 'item-1', productId: 1, nombre: 'Almendra', formato: '11,34', cantidad: 1, precioKg: 100 },
+    ];
+    const { repos } = renderCotizador(items, { totalKg: 11.34, subtotal: 1134, iva: 215, total: 1349 });
+
+    fireEvent.click(screen.getByRole('button', { name: /guardar cotización/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/cotización guardada/i)).toBeInTheDocument(),
+    );
+    const quotes = await repos.quotes.listOwn('test-user');
+    expect(quotes).toHaveLength(1);
+    expect(quotes[0].total).toBe(1349);
   });
 
   it('should render the PDF trigger disabled when there are no items', async () => {

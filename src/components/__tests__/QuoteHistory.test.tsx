@@ -1,172 +1,144 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QuoteHistory } from '../QuoteHistory';
-import { getAllQuotes, deleteQuote } from '../../db/database';
+import { ToastProvider } from '../../hooks/ToastProvider';
+import { DataProvider } from '../../data/DataProvider';
+import { createInMemoryRepositories } from '../../data/testing/inMemoryRepos';
+import type { Repositories } from '../../data/ports';
+import type { SavedQuote } from '../../types/quote';
 
-function renderWithRouter(ui: React.ReactElement) {
-  return render(<MemoryRouter>{ui}</MemoryRouter>);
+const USER_ID = 'user-1';
+
+const mockQuotes: Omit<SavedQuote, 'id' | 'ownerId'>[] = [
+  {
+    fecha: new Date('2024-01-15T10:30:00'),
+    items: [
+      { id: 'item-1', productId: 1, nombre: 'ALMENDRA LAMINADA', formato: '11,34', cantidad: 2, precioKg: 9200 },
+    ],
+    totalNeto: 208416,
+    iva: 39599,
+    total: 247615,
+  },
+  {
+    fecha: new Date('2024-01-10T14:00:00'),
+    items: [
+      { id: 'item-2', productId: 2, nombre: 'Chía', formato: '25', cantidad: 1, precioKg: 2800 },
+      { id: 'item-3', productId: 3, nombre: 'Avéna', formato: '25', cantidad: 3, precioKg: 750 },
+    ],
+    totalNeto: 29750,
+    iva: 5653,
+    total: 35403,
+  },
+];
+
+function renderWithProviders(repos: Repositories) {
+  return render(
+    <MemoryRouter>
+      <ToastProvider>
+        <DataProvider repos={repos} userId={USER_ID}>
+          <QuoteHistory />
+        </DataProvider>
+      </ToastProvider>
+    </MemoryRouter>,
+  );
 }
 
-// Mock the database functions
-vi.mock('../../db/database', () => ({
-  getAllQuotes: vi.fn(),
-  deleteQuote: vi.fn(),
-}));
-
-// Mock useToast
-vi.mock('../../hooks/useToast', () => ({
-  useToast: () => ({
-    toast: {
-      success: vi.fn(),
-      error: vi.fn(),
-      info: vi.fn(),
-      warning: vi.fn(),
-    },
-  }),
-}));
+async function seedQuotes(
+  repos: Repositories,
+  quotes: Omit<SavedQuote, 'id' | 'ownerId'>[],
+): Promise<void> {
+  for (const quote of quotes) {
+    await repos.quotes.create(quote);
+  }
+}
 
 describe('QuoteHistory', () => {
+  let repos: Repositories;
+
   beforeEach(() => {
-    vi.clearAllMocks();
+    repos = createInMemoryRepositories({ userId: USER_ID, isAdmin: false });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   describe('empty state', () => {
     it('should render empty state when no quotes exist', async () => {
-      vi.mocked(getAllQuotes).mockResolvedValue([]);
+      renderWithProviders(repos);
 
-      renderWithRouter(<QuoteHistory />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/no hay cotizaciones guardadas/i)).toBeInTheDocument();
-      });
+      expect(await screen.findByText(/no hay cotizaciones guardadas/i)).toBeInTheDocument();
     });
 
     it('should render link to navigate to cotizador in empty state', async () => {
-      vi.mocked(getAllQuotes).mockResolvedValue([]);
+      renderWithProviders(repos);
 
-      renderWithRouter(<QuoteHistory />);
-
-      await waitFor(() => {
-        const link = screen.getByRole('link', { name: /ir al cotizador/i });
-        expect(link).toBeInTheDocument();
-        expect(link).toHaveAttribute('href', '/cotizador');
-      });
+      const link = await screen.findByRole('link', { name: /ir al cotizador/i });
+      expect(link).toHaveAttribute('href', '/cotizador');
     });
   });
 
   describe('with quotes', () => {
-    const mockQuotes = [
-      {
-        id: 1,
-        fecha: new Date('2024-01-15T10:30:00'),
-        items: [
-          { id: 'item-1', productId: 1, nombre: 'ALMENDRA LAMINADA', formato: '11,34', cantidad: 2, precioKg: 9200 },
-        ],
-        totalNeto: 208416,
-        iva: 39599,
-        total: 247615,
-      },
-      {
-        id: 2,
-        fecha: new Date('2024-01-10T14:00:00'),
-        items: [
-          { id: 'item-2', productId: 2, nombre: 'Chía', formato: '25', cantidad: 1, precioKg: 2800 },
-          { id: 'item-3', productId: 3, nombre: 'Avéna', formato: '25', cantidad: 3, precioKg: 750 },
-        ],
-        totalNeto: 29750,
-        iva: 5653,
-        total: 35403,
-      },
-    ];
-
     it('should render quote cards when quotes exist', async () => {
-      vi.mocked(getAllQuotes).mockResolvedValue(mockQuotes);
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
 
-      renderWithRouter(<QuoteHistory />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/15 de enero de 2024/i)).toBeInTheDocument();
-        expect(screen.getByText(/10 de enero de 2024/i)).toBeInTheDocument();
-      });
+      expect(await screen.findByText(/15 de enero de 2024/i)).toBeInTheDocument();
+      expect(screen.getByText(/10 de enero de 2024/i)).toBeInTheDocument();
     });
 
     it('should show number of items per quote', async () => {
-      vi.mocked(getAllQuotes).mockResolvedValue(mockQuotes);
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
 
-      renderWithRouter(<QuoteHistory />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/1 ítem/i)).toBeInTheDocument();
-        expect(screen.getByText(/2 ítems/i)).toBeInTheDocument();
-      });
+      expect(await screen.findByText(/1 ítem/i)).toBeInTheDocument();
+      expect(screen.getByText(/2 ítems/i)).toBeInTheDocument();
     });
 
     it('should show total for each quote', async () => {
-      vi.mocked(getAllQuotes).mockResolvedValue(mockQuotes);
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
 
-      renderWithRouter(<QuoteHistory />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/\$247\.615/)).toBeInTheDocument();
-        expect(screen.getByText(/\$35\.403/)).toBeInTheDocument();
-      });
+      expect(await screen.findByText(/\$247\.615/)).toBeInTheDocument();
+      expect(screen.getByText(/\$35\.403/)).toBeInTheDocument();
     });
 
     it('should show item names for each quote', async () => {
-      vi.mocked(getAllQuotes).mockResolvedValue(mockQuotes);
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
 
-      renderWithRouter(<QuoteHistory />);
-
-      await waitFor(() => {
-        // First quote items
-        expect(screen.getByText(/ALMENDRA LAMINADA/i)).toBeInTheDocument();
-        // Second quote items
-        expect(screen.getByText(/Chía/i)).toBeInTheDocument();
-        expect(screen.getByText(/Avéna/i)).toBeInTheDocument();
-      });
+      expect(await screen.findByText(/ALMENDRA LAMINADA/i)).toBeInTheDocument();
+      expect(screen.getByText(/Chía/i)).toBeInTheDocument();
+      expect(screen.getByText(/Avéna/i)).toBeInTheDocument();
     });
 
-    it('should call deleteQuote when delete button is clicked and confirmed', async () => {
-      vi.mocked(getAllQuotes).mockResolvedValue(mockQuotes);
-      vi.mocked(deleteQuote).mockResolvedValue(undefined);
+    it('should delete a quote through the repo when confirmed', async () => {
+      await seedQuotes(repos, mockQuotes);
+      vi.stubGlobal('confirm', vi.fn(() => true));
 
-      // Mock window.confirm
-      const mockConfirm = vi.fn(() => true);
-      vi.stubGlobal('confirm', mockConfirm);
+      renderWithProviders(repos);
 
-      renderWithRouter(<QuoteHistory />);
+      await screen.findByText(/15 de enero de 2024/i);
+      fireEvent.click(screen.getAllByRole('button', { name: /eliminar/i })[0]);
 
-      await waitFor(() => {
-        const deleteButtons = screen.getAllByRole('button', { name: /eliminar/i });
-        fireEvent.click(deleteButtons[0]);
-      });
-
-      await waitFor(() => {
-        expect(mockConfirm).toHaveBeenCalledWith('¿Eliminar esta cotización?');
-        expect(deleteQuote).toHaveBeenCalledWith(1);
-      });
-
-      vi.unstubAllGlobals();
+      await waitFor(() =>
+        expect(screen.queryByText(/15 de enero de 2024/i)).not.toBeInTheDocument(),
+      );
+      expect(await repos.quotes.listOwn(USER_ID)).toHaveLength(1);
     });
 
-    it('should not call deleteQuote if user cancels', async () => {
-      vi.mocked(getAllQuotes).mockResolvedValue(mockQuotes);
+    it('should not delete a quote if the user cancels', async () => {
+      await seedQuotes(repos, mockQuotes);
+      vi.stubGlobal('confirm', vi.fn(() => false));
 
-      // Mock window.confirm to return false
-      const mockConfirm = vi.fn(() => false);
-      vi.stubGlobal('confirm', mockConfirm);
+      renderWithProviders(repos);
 
-      renderWithRouter(<QuoteHistory />);
+      await screen.findByText(/15 de enero de 2024/i);
+      fireEvent.click(screen.getAllByRole('button', { name: /eliminar/i })[0]);
 
-      await waitFor(() => {
-        const deleteButtons = screen.getAllByRole('button', { name: /eliminar/i });
-        fireEvent.click(deleteButtons[0]);
-      });
-
-      expect(deleteQuote).not.toHaveBeenCalled();
-
-      vi.unstubAllGlobals();
+      expect(screen.getByText(/15 de enero de 2024/i)).toBeInTheDocument();
+      expect(await repos.quotes.listOwn(USER_ID)).toHaveLength(2);
     });
   });
 });

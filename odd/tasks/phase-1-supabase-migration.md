@@ -385,8 +385,11 @@ review **approved**, no correction). T9 complete (quotes / list-sends / clients
 repository adapters behind the `QuotesRepo`/`ListSendsRepo`/`ClientsRepo` ports, the
 `mergeClientNames` extraction, the quote-type move out of Dexie and the T8 `R3-1`
 draft-shape/autosave hardening; checks green; native RDD review **approved**, no
-correction). T10–T12 pending. No code, tests, builds or installs were run for
-T10–T12.
+correction). T10 complete (quotes / list-sends / clients wired through the
+repository ports, `createSupabaseRepositories`, owner-scoped `createBackupService`,
+extended in-memory fakes; checks green; native RDD review **approved**, no
+correction). T11–T12 pending. No code, tests, builds or installs were run for
+T11–T12.
 
 | Task | Status | Evidence |
 |------|--------|----------|
@@ -399,7 +402,7 @@ T10–T12.
 | T7 | done | `src/data/ProductsCache.ts` (`useSyncExternalStore` store over `Product[] \| undefined`); `src/data/DataProvider.tsx` + `useData.ts` (refresh on mount StrictMode-safe, `visibilitychange→visible`, `window online`, and after every mutation; retains the last snapshot on error); `src/data/local/draftsRepo.ts` (`produclist:quoteDraft`); `src/data/testing/inMemoryRepos.ts` + `stub.ts` (RLS-mirroring fakes with `{ userId, isAdmin }` admin global read, `OwnershipError` on foreign writes) seeded with the 44 `seedProducts`; `vitest.config.ts` excludes `src/data/testing/**`. RED: 5 new suites failed to resolve imports. GREEN: `pnpm coverage` `411 passed (411)` (43 files), coverage 70.96/66.18/74.25/72.37 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0. Route: delegated (planned inline). Native RDD review (lineage `review-4ddb0f0a0e81957f`, tier medium, 1 lens `review-reliability`) **approved**, no correction; 4 advisory findings recorded below. Commit: `adaaaefec4f30e357bdace4896e4652fd4681223`. |
 | T8 | done | Moved the product hooks (`useProducts`/`useAddProduct`/`useUpdateProduct`/`useDeleteProduct`) onto `useData()`/`ProductsRepo` (Dexie removed); `useQuote` uses the local `DraftsRepo`; `QuoteProductSelector`, `ProductPDFDocument` (prop-only) and `PDFButton` read products from the seam; `Root` wires `DataProvider` (real Supabase repos or `VITE_E2E` fakes) around `App`; `App` drops `seedDatabase()`. Fixes T7's `R3-1` (refresh ordering) and `R3-2` (draftsRepo shape). RED: 8 T8 test files failed. GREEN: `pnpm coverage` `433 passed (433)` (47 files), coverage 78.53/69.88/81.29/76.81 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0; `pnpm exec playwright test` 18 passed. Route: delegated (planned inline). Native RDD review (lineage `review-c0c9a9500e909a38`, tier medium, 1 lens `review-reliability`) **approved**, no correction; 3 advisory findings recorded below. Commit: `e81ee73c1d0ed1ba2a8d824a66302a43718e5473`. |
 | T9 | done | `src/data/ports.ts` (`QuoteInput`/`ListSendInput`, `QuotesRepo`, `ListSendsRepo`, `ClientsRepo`; `Repositories` deliberately left `{ products }`, composed in T10); `src/data/supabase/quotesRepo.ts`/`listSendsRepo.ts` (RLS-visible `list()` + owner-scoped `listOwn()`, fecha desc; `create` `.select().single()` mapped; `remove` `.select('id')` + `assertRowAffected` → `OwnershipError`); `clientsRepo.ts` (`listNames()` = RLS-visible union of `cotizaciones` + `listas_enviadas` via `mergeClientNames`); `rows.ts` (`QuoteRow`/`QuoteInsert`, `ListSendRow`/`ListSendInsert`); `mappers.ts` (`rowToSavedQuote`, `quoteInputToInsert`, `rowToListSend`, `listSendInputToInsert`); `src/utils/clientNames.ts` (`mergeClientNames` extracted from `getClientNames`); `SavedQuote`/`QuoteDraft`/`DRAFT_KEY` moved to `src/types/quote.ts` (back-compat re-exports in `database.ts`); optional `ownerId` on `SavedQuote`/`ListSend`; `clientTracking.ts` import decoupled from Dexie; T8 `R3-1` hardened (`Array.isArray(draft.items)` guard in repo + hook; save/clear try/catch). RED: 7 suites failed. GREEN: `pnpm coverage` `479 passed (479)` (52 files), 77.5/70.6/82.11/79.2 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0. Route: delegated. Native RDD review (lineage `review-56edd248e6a7622b`, tier medium, 1 lens `review-reliability`) **approved**, no correction; 3 advisory findings recorded below. Commit: `828f90a74b7c9cb1c03fec6c84c26eefeaa003a9`. |
-| T10 | pending | – |
+| T10 | done | `src/data/ports.ts`: `Repositories` extended with `quotes`/`listSends`/`clients`; `src/data/supabase/repositories.ts` (`createSupabaseRepositories(client)`); `src/utils/exportImport.ts` `createBackupService(repos, userId)` (export/preview/apply read `listOwn(userId)`; products match own by name; quotes/list-sends merge by signature; no Dexie import); components wired via `useData()` (Cotizador save quote + client names; QuoteHistory list/remove; ClientPrices sends/quotes + names; App backup/list-send/client-name); `Root` prod branch uses `createSupabaseRepositories`; in-memory `createInMemoryQuotes/ListSends/ClientsRepo` + full `createInMemoryRepositories`; App empty-import check now includes `listSendsToAdd`. GREEN: `pnpm coverage` `491 passed (491)` (52 files), 78.74/71.16/82.71/80.54 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0; `pnpm exec playwright test` 18 passed. Route: delegated. Native RDD review (lineage `review-2be8f71097aa8abb`, tier medium, 1 lens `review-reliability`) **approved**, no correction; 3 advisory findings below. Commit: `e553efaabb2b14cd682e58ddc057d069ac779f5d`. |
 | T11 | pending | – |
 | T12 | pending | – |
 | Change acceptance | pending | – |
@@ -777,6 +780,55 @@ work, never as a reason to re-review this candidate.
   dereferences the `.single()` row without a null guard (same class as T6's
   `R3-create-payload`).
 
+### T10 evidence detail
+
+- **Deliverables**: `src/data/ports.ts` (`Repositories` gains `quotes`/`listSends`/
+  `clients`; `drafts` intentionally excluded — the local sync drafts repo has no
+  `Repositories` consumer); `src/data/supabase/repositories.ts`
+  (`createSupabaseRepositories(client)` composing the T6/T9 adapters with one
+  structural cast); `src/utils/exportImport.ts` (`createBackupService(repos, userId)`:
+  `exportBackup` reads all three `listOwn(userId)` and keeps `markBackedUp()`;
+  `previewImport` matches own products by `nombre` and own quotes/list-sends by
+  signature; `applyImport` writes via `products.update/create`, `quotes.create`, and
+  re-checks own sends before `listSends.create`; no Dexie import); components wired via
+  `useData()` (`Cotizador` `quotes.create` + `clients.listNames`; `QuoteHistory`
+  `quotes.list`/`remove`; `ClientPrices` `listSends.list` + `quotes.list` +
+  `clients.listNames`; `App` builds the service with `useMemo`, list-send via
+  `listSends.create`, names via `clients.listNames`); `Root` prod branch →
+  `createSupabaseRepositories(createSupabaseClient())`; in-memory
+  `createInMemoryQuotesRepo`/`createInMemoryListSendsRepo`/`createInMemoryClientsRepo`
+  + full `createInMemoryRepositories` (RLS-mirroring, fecha desc, `OwnershipError`);
+  `App` empty-import check now includes `listSendsToAdd`.
+- **Deliberate deviations from the retired design**: `createBackupService(repos, userId)`
+  takes `userId` (the T9 `listOwn(userId)` realization, not the design's no-arg form);
+  `createSupabaseRepositories(client)` drops the design's `userId` param (adapters are
+  stateless, userId is passed at call time); `Repositories.drafts` not added.
+- **Route**: delegated (mirrors T6/T9; frozen contracts + fakes, no UI redesign).
+- **Native RDD review**: lineage `review-2be8f71097aa8abb`, tier medium, 1 lens
+  (`review-reliability`), `approved` with **no correction** (three empty/refused
+  reviewer transport attempts before success — the full materialized prompt exceeds
+  the Task size limit; the short `provider_task.prompt` is the reliable form); 3
+  advisory findings below.
+- **Branch / PR**: `feat/data-wiring` → **PR #48**, base = `feat/quotes-repos`
+  (PR8 / T9).
+- **Commit**: `e553efaabb2b14cd682e58ddc057d069ac779f5d` —
+  `refactor(data): wire quotes, list-sends and clients through the repository ports`.
+
+### Advisory findings from the T10 review (non-blocking)
+
+- `R3-1` (WARNING, `src/utils/exportImport.ts:399-408`) — quote import is no longer
+  atomic: the base `bulkAdd` was all-or-nothing, the new per-quote `quotes.create`
+  loop persists N-1 then reports a partial `quotesAdded` on the Nth failure. The
+  mid-loop failure path is untested. **Candidate regression vs base; fix in T11 or a
+  follow-up.**
+- `R3-2` (WARNING, `src/utils/exportImport.ts:430-436`) — same non-atomic regression
+  for list-send import (per-send create vs base `bulkAdd`).
+- `R3-3` (WARNING, `src/components/QuoteHistory.tsx:123`) — an admin sees every
+  owner's quotes via `repos.quotes.list()` but deletes through owner-scoped
+  `repos.quotes.remove(id)`, so a foreign row renders a delete control whose only
+  outcome is the `OwnershipError` toast. **Hide/disable delete for non-own rows**
+  (the design's admin view is read-only for foreign rows).
+
 Operational milestones (not authored work units):
 
 - M1 (pre-cutover): slice 1 merged to `master`; tracker slices green; dev-project
@@ -787,12 +839,14 @@ Operational milestones (not authored work units):
   seed, imports their own v3 file; per-user verification above passes.
 - M4 (go-live gate): upgrade to Pro or sign off the exception (owner: Piwen).
 
-**Next step**: T10 (wire quotes / list-sends / clients through the repos; extend
-`Repositories` and the in-memory fakes; owner-scoped `createBackupService`). T9 is
-closed — reviewed (approved) with 3 advisory findings recorded above. Before cutover,
-re-run the T3 RLS probe against the linked dev project (Decision 14) and run the
-regression sweep (`pnpm lint`, `pnpm exec tsc -b`, `pnpm coverage`,
-`pnpm exec playwright test`).
+**Next step**: T11 (retire Dexie: delete `src/db/database.ts`, `src/db/seed.ts`, the
+Dexie tests, `BackupReminder` + `backupReminder.ts`; create `src/data/seedProducts.ts`;
+wire per-user `seedIfEmpty`; drop `markBackedUp()` and `fake-indexeddb`; remove the
+Dexie packages). T10 is closed — reviewed (approved) with 3 advisory findings recorded
+above (notably the `R3-1`/`R3-2` non-atomic import regression and the `R3-3` admin
+foreign-row delete affordance). Before cutover, re-run the T3 RLS probe against the
+linked dev project (Decision 14) and run the regression sweep (`pnpm lint`,
+`pnpm exec tsc -b`, `pnpm coverage`, `pnpm exec playwright test`).
 
 ## Delivery strategy + slice boundaries
 

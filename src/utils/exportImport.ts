@@ -1,6 +1,6 @@
-import { addProduct, db, type SavedQuote } from '../db/database';
+import type { Repositories } from '../data/ports';
 import type { Product, ProductInput, Category } from '../types/product';
-import type { QuoteItem } from '../types/quote';
+import type { QuoteItem, SavedQuote } from '../types/quote';
 import type { ListSend } from '../types/listSend';
 import { isValidChileanFormat } from './price';
 import { markBackedUp } from './backupReminder';
@@ -50,29 +50,6 @@ function backupFilename(now: Date = new Date()): string {
   const m = String(now.getMonth() + 1).padStart(2, '0');
   const d = String(now.getDate()).padStart(2, '0');
   return `produclist-backup-${y}-${m}-${d}.json`;
-}
-
-/**
- * Export products, saved quotes AND sent price lists as one JSON backup file.
- *
- * CSV export was removed — not used and unnecessarily double-quoted names.
- */
-export async function exportBackup(products: Product[]): Promise<void> {
-  const [quotes, listSends] = await Promise.all([
-    db.quotes.toArray(),
-    db.listSends.toArray(),
-  ]);
-  const backup: BackupFile = {
-    version: BACKUP_VERSION,
-    exportedAt: new Date().toISOString(),
-    products,
-    quotes,
-    listSends,
-  };
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-  downloadBlob(blob, backupFilename());
-  // Any export counts as a backup — the reminder resets from here.
-  markBackedUp();
 }
 
 /**
@@ -316,131 +293,189 @@ export function parseProductImport(text: string): {
 }
 
 /**
- * Match a validated import against the current database WITHOUT writing anything.
+ * Owner-scoped backup and import operations over the repository ports.
  *
- * Products match by name (a product with the same name is updated, otherwise it
- * is added). Quotes and list sends merge by content signature: only the ones
- * this device does not already have are kept, so importing a backup never
- * duplicates or destroys history.
+ * Every read is scoped to one user (`listOwn(userId)`), so exporting an admin's
+ * backup contains only the admin's own partition, never the rows RLS also makes
+ * visible. Imports match and merge against that same partition.
  */
-export async function previewImport(text: string): Promise<ImportPreview> {
-  const { valid, quotes, listSends, errors } = parseProductImport(text);
+export interface BackupService {
+  /** Read one user's partition (products, quotes, list sends) and download it. */
+  exportBackup(): Promise<void>;
+  previewImport(text: string): Promise<ImportPreview>;
+  applyImport(preview: ImportPreview): Promise<ImportResult>;
+}
 
-  const toAdd: ProductInput[] = [];
-  const toUpdate: { id: number; input: ProductInput }[] = [];
+/**
+ * Match a validated import against the user's own partition WITHOUT writing
+ * anything.
+ *
+ * Products match by name among the user's own products only (a same-named
+ * product is updated, otherwise it is added). Quotes and list sends merge by
+ * content signature against the user's own history: only the ones not already
+ * stored are kept, so importing a backup never duplicates or destroys history.
+ */
+function createPreviewImport(
+  repos: Repositories,
+  userId: string,
+): (text: string) => Promise<ImportPreview> {
+  return async (text) => {
+    const { valid, quotes, listSends, errors } = parseProductImport(text);
 
-  for (const input of valid) {
-    const existing = await db.products.where('nombre').equals(input.nombre).first();
-    if (existing && existing.id) {
-      toUpdate.push({ id: existing.id, input });
-    } else {
-      toAdd.push(input);
+    const ownProducts = await repos.products.listOwn(userId);
+    const toAdd: ProductInput[] = [];
+    const toUpdate: { id: number; input: ProductInput }[] = [];
+
+    for (const input of valid) {
+      const existing = ownProducts.find((product) => product.nombre === input.nombre);
+      if (existing && existing.id) {
+        toUpdate.push({ id: existing.id, input });
+      } else {
+        toAdd.push(input);
+      }
     }
-  }
 
-  const existingQuotes = await db.quotes.toArray();
-  const quotesToAdd = unseenBySignature(
-    existingQuotes.map(quoteSignature),
-    quotes,
-    quoteSignature
-  );
+    const ownQuotes = await repos.quotes.listOwn(userId);
+    const quotesToAdd = unseenBySignature(
+      ownQuotes.map(quoteSignature),
+      quotes,
+      quoteSignature
+    );
 
-  const existingSends = await db.listSends.toArray();
-  const listSendsToAdd = unseenBySignature(
-    existingSends.map(listSendSignature),
-    listSends,
-    listSendSignature
-  );
+    const ownSends = await repos.listSends.listOwn(userId);
+    const listSendsToAdd = unseenBySignature(
+      ownSends.map(listSendSignature),
+      listSends,
+      listSendSignature
+    );
 
-  return { toAdd, toUpdate, quotesToAdd, listSendsToAdd, errors };
+    return { toAdd, toUpdate, quotesToAdd, listSendsToAdd, errors };
+  };
 }
 
 /**
  * Apply a preview. This is the only import step that writes to the database.
  */
-export async function applyImport(preview: ImportPreview): Promise<ImportResult> {
-  const result: ImportResult = {
-    success: 0,
-    updated: 0,
-    quotesAdded: 0,
-    listSendsAdded: 0,
-    errors: [...preview.errors],
-  };
+function createApplyImport(
+  repos: Repositories,
+  userId: string,
+): (preview: ImportPreview) => Promise<ImportResult> {
+  return async (preview) => {
+    const result: ImportResult = {
+      success: 0,
+      updated: 0,
+      quotesAdded: 0,
+      listSendsAdded: 0,
+      errors: [...preview.errors],
+    };
 
-  for (const { id, input } of preview.toUpdate) {
-    try {
-      await db.products.update(id, input);
-      result.updated++;
-    } catch (err) {
-      result.errors.push({
-        nombre: input.nombre,
-        error: err instanceof Error ? err.message : 'Error desconocido.',
-      });
+    for (const { id, input } of preview.toUpdate) {
+      try {
+        await repos.products.update(id, input);
+        result.updated++;
+      } catch (err) {
+        result.errors.push({
+          nombre: input.nombre,
+          error: err instanceof Error ? err.message : 'Error desconocido.',
+        });
+      }
     }
-  }
 
-  for (const input of preview.toAdd) {
-    try {
-      await addProduct(input);
-      result.success++;
-    } catch (err) {
-      result.errors.push({
-        nombre: input.nombre,
-        error: err instanceof Error ? err.message : 'Error desconocido.',
-      });
+    for (const input of preview.toAdd) {
+      try {
+        await repos.products.create(input);
+        result.success++;
+      } catch (err) {
+        result.errors.push({
+          nombre: input.nombre,
+          error: err instanceof Error ? err.message : 'Error desconocido.',
+        });
+      }
     }
-  }
 
-  if (preview.quotesToAdd.length > 0) {
-    try {
-      // Drop ids so Dexie assigns fresh ones: cross-device ids must not collide.
-      await db.quotes.bulkAdd(
-        preview.quotesToAdd.map((quote) => ({
-          fecha: quote.fecha,
-          items: quote.items,
-          totalNeto: quote.totalNeto,
-          iva: quote.iva,
-          total: quote.total,
-        }))
-      );
-      result.quotesAdded = preview.quotesToAdd.length;
-    } catch (err) {
-      result.errors.push({
-        nombre: '(cotizaciones)',
-        error: err instanceof Error ? err.message : 'Error desconocido.',
-      });
+    if (preview.quotesToAdd.length > 0) {
+      try {
+        // Drop incoming ids: cross-device ids must not collide.
+        for (const quote of preview.quotesToAdd) {
+          await repos.quotes.create({
+            fecha: quote.fecha,
+            cliente: quote.cliente,
+            items: quote.items,
+            totalNeto: quote.totalNeto,
+            iva: quote.iva,
+            total: quote.total,
+          });
+          result.quotesAdded++;
+        }
+      } catch (err) {
+        result.errors.push({
+          nombre: '(cotizaciones)',
+          error: err instanceof Error ? err.message : 'Error desconocido.',
+        });
+      }
     }
-  }
 
-  if (preview.listSendsToAdd.length > 0) {
-    try {
-      // Re-check against the current database so a stale preview cannot
-      // duplicate a send: apply is itself signature-idempotent.
-      const existing = await db.listSends.toArray();
-      const unseen = unseenBySignature(
-        existing.map(listSendSignature),
-        preview.listSendsToAdd,
-        listSendSignature
-      );
+    if (preview.listSendsToAdd.length > 0) {
+      try {
+        // Re-check against the user's own sends so a stale preview cannot
+        // duplicate a send: apply is itself signature-idempotent.
+        const ownSends = await repos.listSends.listOwn(userId);
+        const unseen = unseenBySignature(
+          ownSends.map(listSendSignature),
+          preview.listSendsToAdd,
+          listSendSignature
+        );
 
-      if (unseen.length > 0) {
-        // Drop ids so Dexie assigns fresh ones: cross-device ids must not collide.
-        await db.listSends.bulkAdd(
-          unseen.map((send) => ({
+        // Drop incoming ids: cross-device ids must not collide.
+        for (const send of unseen) {
+          await repos.listSends.create({
             fecha: send.fecha,
             cliente: send.cliente,
             items: send.items,
-          }))
-        );
+          });
+          result.listSendsAdded++;
+        }
+      } catch (err) {
+        result.errors.push({
+          nombre: '(listas enviadas)',
+          error: err instanceof Error ? err.message : 'Error desconocido.',
+        });
       }
-      result.listSendsAdded = unseen.length;
-    } catch (err) {
-      result.errors.push({
-        nombre: '(listas enviadas)',
-        error: err instanceof Error ? err.message : 'Error desconocido.',
-      });
     }
-  }
 
-  return result;
+    return result;
+  };
+}
+
+/**
+ * Build the owner-scoped backup service. `exportBackup` reads the user's own
+ * products, quotes and list sends (all three) and downloads the v3 file.
+ */
+export function createBackupService(repos: Repositories, userId: string): BackupService {
+  return {
+    async exportBackup() {
+      const [products, quotes, listSends] = await Promise.all([
+        repos.products.listOwn(userId),
+        repos.quotes.listOwn(userId),
+        repos.listSends.listOwn(userId),
+      ]);
+      const backup: BackupFile = {
+        version: BACKUP_VERSION,
+        exportedAt: new Date().toISOString(),
+        products,
+        quotes,
+        listSends,
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {
+        type: 'application/json',
+      });
+      downloadBlob(blob, backupFilename());
+      // Any export counts as a backup — the reminder resets from here.
+      markBackedUp();
+    },
+
+    previewImport: createPreviewImport(repos, userId),
+
+    applyImport: createApplyImport(repos, userId),
+  };
 }

@@ -1,5 +1,15 @@
-import { OwnershipError, type ProductsRepo, type Repositories } from '../ports';
+import {
+  OwnershipError,
+  type ClientsRepo,
+  type ListSendsRepo,
+  type ProductsRepo,
+  type QuotesRepo,
+  type Repositories,
+} from '../ports';
 import type { Product, ProductInput } from '../../types/product';
+import type { SavedQuote } from '../../types/quote';
+import type { ListSend } from '../../types/listSend';
+import { mergeClientNames } from '../../utils/clientNames';
 
 export interface Principal {
   userId: string;
@@ -8,6 +18,15 @@ export interface Principal {
 
 function duplicateMessage(nombre: string): string {
   return `Ya existe un producto llamado "${nombre}"`;
+}
+
+function nextIdAfter(rows: { id?: number }[]): number {
+  return rows.reduce((max, row) => Math.max(max, row.id ?? 0), 0) + 1;
+}
+
+/** Newest first by fecha, mirroring the adapter's `order('fecha')` read. */
+function byFechaDesc<T extends { fecha: Date }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
 }
 
 /**
@@ -93,9 +112,133 @@ export function createInMemoryProductsRepo(
   };
 }
 
+/**
+ * In-memory stand-in for the Supabase quotes adapter. Mirrors the RLS-visible
+ * contract: reads expose own rows (or every owner for an admin), `create`
+ * attributes to the principal, and removing a foreign/missing row rejects with
+ * `OwnershipError`. Rows are returned newest first by `fecha`.
+ */
+export function createInMemoryQuotesRepo(
+  principal: Principal,
+  seed: SavedQuote[] = [],
+): QuotesRepo {
+  const rows: SavedQuote[] = seed.map((row) => ({ ...row }));
+  let nextId = nextIdAfter(rows);
+
+  const ownRows = (userId: string): SavedQuote[] =>
+    rows.filter((row) => row.ownerId === userId);
+
+  return {
+    list() {
+      const visible = principal.isAdmin ? rows : ownRows(principal.userId);
+      return Promise.resolve(byFechaDesc(visible).map((row) => ({ ...row })));
+    },
+
+    listOwn(userId) {
+      return Promise.resolve(byFechaDesc(ownRows(userId)).map((row) => ({ ...row })));
+    },
+
+    create(data) {
+      const quote: SavedQuote = {
+        id: nextId,
+        fecha: data.fecha ?? new Date(),
+        cliente: data.cliente,
+        items: data.items,
+        totalNeto: data.totalNeto,
+        iva: data.iva,
+        total: data.total,
+        ownerId: principal.userId,
+      };
+      nextId += 1;
+      rows.push(quote);
+      return Promise.resolve({ ...quote });
+    },
+
+    remove(id) {
+      const row = rows.find((r) => r.id === id && r.ownerId === principal.userId);
+      if (!row) return Promise.reject(new OwnershipError());
+      rows.splice(rows.indexOf(row), 1);
+      return Promise.resolve();
+    },
+  };
+}
+
+/**
+ * In-memory stand-in for the Supabase list-sends adapter. Same RLS contract as
+ * `createInMemoryQuotesRepo`, newest first by `fecha`.
+ */
+export function createInMemoryListSendsRepo(
+  principal: Principal,
+  seed: ListSend[] = [],
+): ListSendsRepo {
+  const rows: ListSend[] = seed.map((row) => ({ ...row }));
+  let nextId = nextIdAfter(rows);
+
+  const ownRows = (userId: string): ListSend[] =>
+    rows.filter((row) => row.ownerId === userId);
+
+  return {
+    list() {
+      const visible = principal.isAdmin ? rows : ownRows(principal.userId);
+      return Promise.resolve(byFechaDesc(visible).map((row) => ({ ...row })));
+    },
+
+    listOwn(userId) {
+      return Promise.resolve(byFechaDesc(ownRows(userId)).map((row) => ({ ...row })));
+    },
+
+    create(data) {
+      const send: ListSend = {
+        id: nextId,
+        fecha: data.fecha ?? new Date(),
+        cliente: data.cliente,
+        items: data.items,
+        ownerId: principal.userId,
+      };
+      nextId += 1;
+      rows.push(send);
+      return Promise.resolve({ ...send });
+    },
+
+    remove(id) {
+      const row = rows.find((r) => r.id === id && r.ownerId === principal.userId);
+      if (!row) return Promise.reject(new OwnershipError());
+      rows.splice(rows.indexOf(row), 1);
+      return Promise.resolve();
+    },
+  };
+}
+
+/**
+ * In-memory stand-in for the Supabase clients adapter: the RLS-visible union of
+ * client names, read through the quotes and list-sends ports so an admin sees
+ * every owner's names and a vendor only their own.
+ */
+export function createInMemoryClientsRepo(
+  quotes: QuotesRepo,
+  listSends: ListSendsRepo,
+): ClientsRepo {
+  return {
+    async listNames() {
+      const [visibleQuotes, visibleSends] = await Promise.all([
+        quotes.list(),
+        listSends.list(),
+      ]);
+      return mergeClientNames(visibleQuotes, visibleSends);
+    },
+  };
+}
+
 export function createInMemoryRepositories(
   principal: Principal,
   seed: ProductInput[] = [],
 ): Repositories {
-  return { products: createInMemoryProductsRepo(principal, seed) };
+  const quotes = createInMemoryQuotesRepo(principal);
+  const listSends = createInMemoryListSendsRepo(principal);
+  return {
+    products: createInMemoryProductsRepo(principal, seed),
+    quotes,
+    listSends,
+    clients: createInMemoryClientsRepo(quotes, listSends),
+  };
 }
