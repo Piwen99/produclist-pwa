@@ -12,6 +12,7 @@ export default defineConfig({
       exclude: [
         'src/**/*.test.*',
         'src/**/__tests__/**',
+        'src/data/testing/**',
         'src/test-setup.ts',
         'src/vite-env.d.ts',
       ],
