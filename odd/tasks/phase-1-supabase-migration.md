@@ -759,7 +759,7 @@ work, never as a reason to re-review this candidate.
 - **Route**: delegated (mirrors T6; frozen contracts, structural stub-client tests).
 - **Native RDD review**: lineage `review-56edd248e6a7622b`, tier medium, 1 lens
   (`review-reliability`), `approved` with **no correction**; 3 advisory findings below.
-- **Branch / PR**: `feat/quotes-repos` → PR base = tracker
+- **Branch / PR**: `feat/quotes-repos` → **PR #47**, base = tracker
   `feat/phase-1-supabase-migration`.
 - **Commit**: `828f90a74b7c9cb1c03fec6c84c26eefeaa003a9` —
   `feat(data): add quotes, list-sends and clients repository adapters`.
