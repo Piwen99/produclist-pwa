@@ -197,6 +197,7 @@ function App() {
       if (result.success > 0) parts.push(`${String(result.success)} agregados`);
       if (result.updated > 0) parts.push(`${String(result.updated)} actualizados`);
       if (result.quotesAdded > 0) parts.push(`${String(result.quotesAdded)} cotizaciones`);
+      if (result.listSendsAdded > 0) parts.push(`${String(result.listSendsAdded)} listas enviadas`);
       if (result.errors.length > 0) parts.push(`${String(result.errors.length)} errores`);
 
       toast.success(`Importación completada: ${parts.join(', ')}.`);
@@ -216,7 +217,7 @@ function App() {
   const listSendProductCount = products ? buildListSendItems(products).length : 0;
 
   const importMessage = importPreview
-    ? `Se agregarán ${String(importPreview.toAdd.length)}, se actualizarán ${String(importPreview.toUpdate.length)} productos y se sumarán ${String(importPreview.quotesToAdd.length)} cotizaciones.`
+    ? `Se agregarán ${String(importPreview.toAdd.length)}, se actualizarán ${String(importPreview.toUpdate.length)} productos y se sumarán ${String(importPreview.quotesToAdd.length)} cotizaciones y ${String(importPreview.listSendsToAdd.length)} listas enviadas.`
     : '';
 
   const importNote =
