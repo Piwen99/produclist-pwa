@@ -3,6 +3,7 @@ import { StrictMode, type ReactNode } from 'react';
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { DataProvider } from '../DataProvider';
 import { useData } from '../useData';
+import { createInMemoryRepositories } from '../testing/inMemoryRepos';
 import type { ProductsRepo, Repositories } from '../ports';
 import type { Product, ProductInput } from '../../types/product';
 
@@ -43,6 +44,14 @@ function createRepo(overrides: Partial<ProductsRepo> = {}): ProductsRepo {
     remove: vi.fn().mockResolvedValue(undefined),
     seedIfEmpty: vi.fn().mockResolvedValue(undefined),
     ...overrides,
+  };
+}
+
+/** A full port set whose products repo is the given mock; the rest are inert. */
+function withProducts(products: ProductsRepo): Repositories {
+  return {
+    ...createInMemoryRepositories({ userId: 'user-1', isAdmin: false }),
+    products,
   };
 }
 
@@ -98,7 +107,9 @@ afterEach(() => {
 describe('DataProvider', () => {
   it('leaves products undefined until the first successful load', async () => {
     const pending = deferred<Product[]>();
-    const repos: Repositories = { products: createRepo({ list: vi.fn(() => pending.promise) }) };
+    const repos: Repositories = withProducts(
+      createRepo({ list: vi.fn(() => pending.promise) }),
+    );
 
     renderProbe(repos);
     expect(screen.getByTestId('count')).toHaveTextContent('undefined');
@@ -117,7 +128,7 @@ describe('DataProvider', () => {
       .mockResolvedValueOnce([P1])
       .mockRejectedValueOnce(new Error('offline'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    renderProbe({ products: createRepo({ list }) });
+    renderProbe(withProducts(createRepo({ list })));
 
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
 
@@ -137,7 +148,7 @@ describe('DataProvider', () => {
       .fn<ProductsRepo['list']>()
       .mockReturnValueOnce(older.promise)
       .mockReturnValueOnce(newer.promise);
-    renderProbe({ products: createRepo({ list }) });
+    renderProbe(withProducts(createRepo({ list })));
     await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -162,7 +173,7 @@ describe('DataProvider', () => {
 
   it('refreshes when the document becomes visible', async () => {
     const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
-    renderProbe({ products: createRepo({ list }) });
+    renderProbe(withProducts(createRepo({ list })));
     await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
 
     list.mockClear();
@@ -180,7 +191,7 @@ describe('DataProvider', () => {
 
   it('does not refresh while the document stays hidden', async () => {
     const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
-    renderProbe({ products: createRepo({ list }) });
+    renderProbe(withProducts(createRepo({ list })));
     await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
 
     list.mockClear();
@@ -201,7 +212,7 @@ describe('DataProvider', () => {
 
   it('refreshes when the window comes back online', async () => {
     const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
-    renderProbe({ products: createRepo({ list }) });
+    renderProbe(withProducts(createRepo({ list })));
     await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
 
     list.mockClear();
@@ -215,7 +226,7 @@ describe('DataProvider', () => {
   it('refreshes after adding a product', async () => {
     const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([]);
     const create = vi.fn<ProductsRepo['create']>().mockResolvedValue(P1);
-    renderProbe({ products: createRepo({ list, create }) });
+    renderProbe(withProducts(createRepo({ list, create })));
     await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -229,7 +240,7 @@ describe('DataProvider', () => {
   it('refreshes after updating a product', async () => {
     const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([]);
     const update = vi.fn<ProductsRepo['update']>().mockResolvedValue(undefined);
-    renderProbe({ products: createRepo({ list, update }) });
+    renderProbe(withProducts(createRepo({ list, update })));
     await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -243,7 +254,7 @@ describe('DataProvider', () => {
   it('refreshes after deleting a product', async () => {
     const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([]);
     const remove = vi.fn<ProductsRepo['remove']>().mockResolvedValue(undefined);
-    renderProbe({ products: createRepo({ list, remove }) });
+    renderProbe(withProducts(createRepo({ list, remove })));
     await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
 
     act(() => {
@@ -259,7 +270,7 @@ describe('DataProvider', () => {
     const removeSpy = vi.spyOn(document, 'removeEventListener');
     const winAdd = vi.spyOn(window, 'addEventListener');
     const winRemove = vi.spyOn(window, 'removeEventListener');
-    const repos: Repositories = { products: createRepo() };
+    const repos: Repositories = withProducts(createRepo());
 
     const { unmount } = renderProbe(repos);
     unmount();
@@ -274,7 +285,7 @@ describe('DataProvider', () => {
     const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
     render(
       <StrictMode>
-        <DataProvider repos={{ products: createRepo({ list }) }} userId="user-1">
+        <DataProvider repos={withProducts(createRepo({ list }))} userId="user-1">
           <Probe />
         </DataProvider>
       </StrictMode>,
@@ -287,7 +298,7 @@ describe('DataProvider', () => {
   it('exposes the injected principal id', () => {
     const { result } = renderHook(() => useData(), {
       wrapper: ({ children }: { children: ReactNode }) => (
-        <DataProvider repos={{ products: createRepo() }} userId="vendor-7">
+        <DataProvider repos={withProducts(createRepo())} userId="vendor-7">
           {children}
         </DataProvider>
       ),

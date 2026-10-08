@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { getAllQuotes, deleteQuote, type SavedQuote } from '../db/database';
+import type { SavedQuote } from '../types/quote';
+import { useData } from '../data/useData';
 import { useToast } from '../hooks/useToast';
 import { formatCurrency, parseChileanNumber } from '../utils/price';
 
@@ -93,12 +94,14 @@ function QuoteCard({ quote, onDelete }: QuoteCardProps) {
 export function QuoteHistory() {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { repos } = useData();
   const { toast } = useToast();
   // toast.error is memoized in ToastProvider; the toast container object is not.
   const showError = toast.error;
 
   const loadQuotes = useCallback(() => {
-    getAllQuotes()
+    repos.quotes
+      .list()
       .then((data) => {
         setQuotes(data);
       })
@@ -109,7 +112,7 @@ export function QuoteHistory() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [showError]);
+  }, [repos, showError]);
 
   useEffect(() => {
     loadQuotes();
@@ -117,7 +120,7 @@ export function QuoteHistory() {
 
   const handleDelete = async (id: number) => {
     try {
-      await deleteQuote(id);
+      await repos.quotes.remove(id);
       setQuotes((prev) => prev.filter((q) => q.id !== id));
       toast.success('Cotización eliminada');
     } catch (error) {

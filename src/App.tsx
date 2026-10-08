@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Routes, Route, NavLink } from 'react-router-dom';
 import { useProducts } from './hooks/useProducts';
 import { useAddProduct } from './hooks/useAddProduct';
@@ -17,9 +17,9 @@ import { ClientPrices } from './components/ClientPrices';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { BackupReminder } from './components/BackupReminder';
 import { ListSendForm } from './components/ListSendForm';
-import { exportBackup, previewImport, applyImport, type ImportPreview } from './utils/exportImport';
+import { createBackupService, type ImportPreview } from './utils/exportImport';
 import { buildListSendItems } from './utils/listSend';
-import { saveListSend, getClientNames } from './db/database';
+import { useData } from './data/useData';
 import type { Product, ProductInput } from './types/product';
 import './App.css';
 
@@ -30,6 +30,12 @@ function App() {
   const { remove } = useDeleteProduct();
   const { toast } = useToast();
   const { signOut } = useAuth();
+  const { repos, userId } = useData();
+
+  const backupService = useMemo(
+    () => createBackupService(repos, userId),
+    [repos, userId],
+  );
 
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -115,27 +121,26 @@ function App() {
   }, [remove, toast]);
 
   const handleExportJSON = useCallback(() => {
-    if (!products) return;
-    void exportBackup(products);
-  }, [products]);
+    void backupService.exportBackup();
+  }, [backupService]);
 
   const handleOpenListSend = useCallback(() => {
-    void getClientNames().then(setClientNames).catch(console.error);
+    void repos.clients.listNames().then(setClientNames).catch(console.error);
     setShowListSendForm(true);
-  }, []);
+  }, [repos]);
 
   const handleSaveListSend = useCallback(async (cliente: string) => {
     setShowListSendForm(false);
     if (!products) return;
 
     try {
-      await saveListSend({ cliente, items: buildListSendItems(products) });
+      await repos.listSends.create({ cliente, items: buildListSendItems(products) });
       toast.success(`Lista enviada a ${cliente} guardada.`);
     } catch (error) {
       console.error('Error saving list send:', error);
       toast.error('No se pudo guardar la lista enviada.');
     }
-  }, [products, toast]);
+  }, [products, repos, toast]);
 
   const handleCancelListSend = useCallback(() => {
     setShowListSendForm(false);
@@ -160,12 +165,13 @@ function App() {
 
     try {
       // Dry-run: validate and match against the catalog WITHOUT writing anything.
-      const preview = await previewImport(await file.text());
+      const preview = await backupService.previewImport(await file.text());
 
       if (
         preview.toAdd.length === 0 &&
         preview.toUpdate.length === 0 &&
-        preview.quotesToAdd.length === 0
+        preview.quotesToAdd.length === 0 &&
+        preview.listSendsToAdd.length === 0
       ) {
         toast.error(
           preview.errors.length > 0
@@ -181,7 +187,7 @@ function App() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al importar.');
     }
-  }, [toast]);
+  }, [backupService, toast]);
 
   const handleConfirmImport = useCallback(async () => {
     const preview = importPreview;
@@ -191,11 +197,11 @@ function App() {
     try {
       // Back up the current catalog before overwriting anything, so a wrong or
       // stale file can never destroy the price list irreversibly.
-      if (preview.toUpdate.length > 0 && products) {
-        await exportBackup(products);
+      if (preview.toUpdate.length > 0) {
+        await backupService.exportBackup();
       }
 
-      const result = await applyImport(preview);
+      const result = await backupService.applyImport(preview);
       const parts: string[] = [];
       if (result.success > 0) parts.push(`${String(result.success)} agregados`);
       if (result.updated > 0) parts.push(`${String(result.updated)} actualizados`);
@@ -210,7 +216,7 @@ function App() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al importar.');
     }
-  }, [importPreview, products, toast]);
+  }, [importPreview, backupService, toast]);
 
   const handleCancelImport = useCallback(() => {
     setImportPreview(null);

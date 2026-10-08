@@ -6,7 +6,7 @@ import { createE2eAuth } from './auth/testing/fakeAuth';
 import { createSupabaseAuth } from './auth/supabaseAuth';
 import { createSupabaseClient, readSupabaseConfig } from './data/supabase/client';
 import { createE2eRepositories } from './data/testing/stub';
-import { createProductsRepo, type ProductsClient } from './data/supabase/productsRepo';
+import { createSupabaseRepositories } from './data/supabase/repositories';
 import { DataProvider } from './data/DataProvider';
 import type { Repositories } from './data/ports';
 import type { AuthPort } from './auth/ports';
@@ -26,9 +26,7 @@ function resolveRepositories(userId: string): Repositories {
   if (import.meta.env.VITE_E2E === '1') {
     return createE2eRepositories({ userId, isAdmin: false });
   }
-  return {
-    products: createProductsRepo(createSupabaseClient() as unknown as ProductsClient),
-  };
+  return createSupabaseRepositories(createSupabaseClient());
 }
 
 function LoadingScreen() {

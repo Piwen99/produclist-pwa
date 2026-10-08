@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
+  createInMemoryClientsRepo,
+  createInMemoryListSendsRepo,
   createInMemoryProductsRepo,
+  createInMemoryQuotesRepo,
   createInMemoryRepositories,
   type Principal,
 } from '../testing/inMemoryRepos';
 import { OwnershipError } from '../ports';
 import type { ProductInput } from '../../types/product';
+import type { SavedQuote } from '../../types/quote';
+import type { ListSend } from '../../types/listSend';
 
 const VENDOR: Principal = { userId: 'vendor-a', isAdmin: false };
 const ADMIN: Principal = { userId: 'admin-1', isAdmin: true };
@@ -180,13 +185,162 @@ describe('createInMemoryProductsRepo', () => {
   });
 });
 
+const quoteRow = (over: Partial<SavedQuote> = {}): SavedQuote => ({
+  id: 1,
+  fecha: new Date('2026-09-01'),
+  cliente: 'Cliente',
+  items: [],
+  totalNeto: 0,
+  iva: 0,
+  total: 0,
+  ownerId: 'vendor-a',
+  ...over,
+});
+
+const sendRow = (over: Partial<ListSend> = {}): ListSend => ({
+  id: 1,
+  fecha: new Date('2026-09-01'),
+  cliente: 'Cliente',
+  items: [],
+  ownerId: 'vendor-a',
+  ...over,
+});
+
+describe('createInMemoryQuotesRepo', () => {
+  it('lists only own rows for a non-admin and every owner for an admin (RLS mirror)', async () => {
+    const rows = [quoteRow({ id: 1, ownerId: 'vendor-a' }), quoteRow({ id: 2, ownerId: 'vendor-b' })];
+
+    const vendor = createInMemoryQuotesRepo(VENDOR, rows);
+    const admin = createInMemoryQuotesRepo(ADMIN, rows);
+
+    expect(await vendor.list()).toHaveLength(1);
+    expect(await admin.list()).toHaveLength(2);
+  });
+
+  it('returns own rows newest first by fecha', async () => {
+    const repo = createInMemoryQuotesRepo(VENDOR, [
+      quoteRow({ id: 1, ownerId: 'vendor-a', fecha: new Date('2026-09-01') }),
+      quoteRow({ id: 2, ownerId: 'vendor-a', fecha: new Date('2026-09-20') }),
+    ]);
+
+    const rows = await repo.listOwn('vendor-a');
+
+    expect(rows.map((row) => row.id)).toEqual([2, 1]);
+  });
+
+  it('create attributes the row to the principal and assigns an id', async () => {
+    const repo = createInMemoryQuotesRepo(VENDOR);
+
+    const created = await repo.create({
+      fecha: new Date('2026-09-01'),
+      cliente: 'X',
+      items: [],
+      totalNeto: 1,
+      iva: 0,
+      total: 1,
+    });
+
+    expect(created.id).toBe(1);
+    expect(created.ownerId).toBe('vendor-a');
+    expect(await repo.listOwn('vendor-a')).toHaveLength(1);
+  });
+
+  it('remove of a foreign or missing row rejects with OwnershipError', async () => {
+    const repo = createInMemoryQuotesRepo(ADMIN, [quoteRow({ id: 1, ownerId: 'vendor-b' })]);
+
+    await expect(repo.remove(1)).rejects.toBeInstanceOf(OwnershipError);
+    await expect(repo.remove(999)).rejects.toBeInstanceOf(OwnershipError);
+  });
+});
+
+describe('createInMemoryListSendsRepo', () => {
+  it('lists only own rows for a non-admin and every owner for an admin (RLS mirror)', async () => {
+    const rows = [sendRow({ id: 1, ownerId: 'vendor-a' }), sendRow({ id: 2, ownerId: 'vendor-b' })];
+
+    const vendor = createInMemoryListSendsRepo(VENDOR, rows);
+    const admin = createInMemoryListSendsRepo(ADMIN, rows);
+
+    expect(await vendor.list()).toHaveLength(1);
+    expect(await admin.list()).toHaveLength(2);
+  });
+
+  it('returns own rows newest first by fecha', async () => {
+    const repo = createInMemoryListSendsRepo(VENDOR, [
+      sendRow({ id: 1, ownerId: 'vendor-a', fecha: new Date('2026-09-01') }),
+      sendRow({ id: 2, ownerId: 'vendor-a', fecha: new Date('2026-09-20') }),
+    ]);
+
+    const rows = await repo.listOwn('vendor-a');
+
+    expect(rows.map((row) => row.id)).toEqual([2, 1]);
+  });
+
+  it('create attributes the row to the principal and assigns an id', async () => {
+    const repo = createInMemoryListSendsRepo(VENDOR);
+
+    const created = await repo.create({
+      fecha: new Date('2026-09-01'),
+      cliente: 'X',
+      items: [],
+    });
+
+    expect(created.id).toBe(1);
+    expect(created.ownerId).toBe('vendor-a');
+  });
+
+  it('remove of a foreign or missing row rejects with OwnershipError', async () => {
+    const repo = createInMemoryListSendsRepo(ADMIN, [sendRow({ id: 1, ownerId: 'vendor-b' })]);
+
+    await expect(repo.remove(1)).rejects.toBeInstanceOf(OwnershipError);
+    await expect(repo.remove(999)).rejects.toBeInstanceOf(OwnershipError);
+  });
+});
+
+describe('createInMemoryClientsRepo', () => {
+  it('merges the RLS-visible quote and send names, de-duplicated and sorted', async () => {
+    const quotes = createInMemoryQuotesRepo(VENDOR, [
+      quoteRow({ id: 1, ownerId: 'vendor-a', cliente: '  Juan ' }),
+    ]);
+    const sends = createInMemoryListSendsRepo(VENDOR, [
+      sendRow({ id: 1, ownerId: 'vendor-a', cliente: 'Ana' }),
+    ]);
+
+    const clients = createInMemoryClientsRepo(quotes, sends);
+
+    expect(await clients.listNames()).toEqual(['Ana', 'Juan']);
+  });
+
+  it('exposes every owner names to an admin but only own names to a vendor', async () => {
+    const rows = [
+      quoteRow({ id: 1, ownerId: 'admin-1', cliente: 'Admin Client' }),
+      quoteRow({ id: 2, ownerId: 'vendor-b', cliente: 'Vendor Client' }),
+    ];
+    const sends = createInMemoryListSendsRepo(ADMIN, []);
+
+    const adminClients = createInMemoryClientsRepo(
+      createInMemoryQuotesRepo(ADMIN, rows),
+      sends,
+    );
+    const vendorClients = createInMemoryClientsRepo(
+      createInMemoryQuotesRepo(VENDOR, rows),
+      createInMemoryListSendsRepo(VENDOR, []),
+    );
+
+    expect(await adminClients.listNames()).toEqual(['Admin Client', 'Vendor Client']);
+    expect(await vendorClients.listNames()).toEqual([]);
+  });
+});
+
 describe('createInMemoryRepositories', () => {
-  it('returns repositories whose products repo is seeded for the principal', async () => {
+  it('returns the full port set seeded for the principal', async () => {
     const repos = createInMemoryRepositories(VENDOR, [INPUT]);
 
     const products = await repos.products.list();
 
     expect(products).toHaveLength(1);
     expect(products[0]?.ownerId).toBe('vendor-a');
+    expect(await repos.quotes.listOwn('vendor-a')).toEqual([]);
+    expect(await repos.listSends.listOwn('vendor-a')).toEqual([]);
+    expect(await repos.clients.listNames()).toEqual([]);
   });
 });

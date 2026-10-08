@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { DataProvider } from '../../data/DataProvider';
 import { useProducts } from '../useProducts';
+import { createInMemoryRepositories } from '../../data/testing/inMemoryRepos';
 import type { ProductsRepo, Repositories } from '../../data/ports';
 import type { Product } from '../../types/product';
 
@@ -36,6 +37,14 @@ function createRepo(overrides: Partial<ProductsRepo> = {}): ProductsRepo {
   };
 }
 
+/** A full port set whose products repo is the given mock; the rest are inert. */
+function withProducts(products: ProductsRepo): Repositories {
+  return {
+    ...createInMemoryRepositories({ userId: 'user-1', isAdmin: false }),
+    products,
+  };
+}
+
 function wrapperFor(repos: Repositories) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return (
@@ -53,7 +62,9 @@ afterEach(() => {
 describe('useProducts', () => {
   it('stays undefined until the first successful load', async () => {
     const pending = deferred<Product[]>();
-    const repos: Repositories = { products: createRepo({ list: vi.fn(() => pending.promise) }) };
+    const repos: Repositories = withProducts(
+      createRepo({ list: vi.fn(() => pending.promise) }),
+    );
 
     const { result } = renderHook(() => useProducts(), { wrapper: wrapperFor(repos) });
 
@@ -69,9 +80,9 @@ describe('useProducts', () => {
 
   it('stays undefined when the first load fails so the skeleton shows', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const repos: Repositories = {
-      products: createRepo({ list: vi.fn().mockRejectedValue(new Error('offline')) }),
-    };
+    const repos: Repositories = withProducts(
+      createRepo({ list: vi.fn().mockRejectedValue(new Error('offline')) }),
+    );
 
     const { result } = renderHook(() => useProducts(), { wrapper: wrapperFor(repos) });
 
@@ -81,9 +92,9 @@ describe('useProducts', () => {
   });
 
   it('exposes the products loaded by the provider', async () => {
-    const repos: Repositories = {
-      products: createRepo({ list: vi.fn().mockResolvedValue([P1]) }),
-    };
+    const repos: Repositories = withProducts(
+      createRepo({ list: vi.fn().mockResolvedValue([P1]) }),
+    );
 
     const { result } = renderHook(() => useProducts(), { wrapper: wrapperFor(repos) });
 

@@ -30,6 +30,9 @@ export interface ProductsRepo {
 
 export interface Repositories {
   products: ProductsRepo;
+  quotes: QuotesRepo;
+  listSends: ListSendsRepo;
+  clients: ClientsRepo;
 }
 
 /** Quote payload for creation: `id`/`fecha` are database/default provided. */
