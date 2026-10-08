@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { BrowserRouter } from 'react-router-dom'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.tsx'
+import Root from './Root.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { ToastProvider } from './hooks/ToastProvider'
 
@@ -13,7 +13,7 @@ createRoot(rootElement).render(
     <BrowserRouter>
       <ErrorBoundary>
         <ToastProvider>
-          <App />
+          <Root />
         </ToastProvider>
       </ErrorBoundary>
     </BrowserRouter>
