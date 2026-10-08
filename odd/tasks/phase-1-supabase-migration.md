@@ -381,8 +381,12 @@ correction needed). T7 complete (products cache, `DataProvider` refresh paths, l
 drafts repo and the `VITE_E2E` in-memory fakes; checks green; native RDD review
 **approved**, no correction). T8 complete (product hooks and views moved onto the ports,
 the data seam wired in `Root`, Dexie removed from the T8 files; checks green; native RDD
-review **approved**, no correction). T9–T12 pending. No code, tests, builds or installs
-were run for T9–T12.
+review **approved**, no correction). T9 complete (quotes / list-sends / clients
+repository adapters behind the `QuotesRepo`/`ListSendsRepo`/`ClientsRepo` ports, the
+`mergeClientNames` extraction, the quote-type move out of Dexie and the T8 `R3-1`
+draft-shape/autosave hardening; checks green; native RDD review **approved**, no
+correction). T10–T12 pending. No code, tests, builds or installs were run for
+T10–T12.
 
 | Task | Status | Evidence |
 |------|--------|----------|
@@ -394,7 +398,7 @@ were run for T9–T12.
 | T6 | done | `src/data/ports.ts` (`OwnershipError`, `ProductsRepo` list/listOwn/create/update/remove/seedIfEmpty, `Repositories`); `src/data/supabase/rows.ts` + `mappers.ts` (snake_case `ProductRow`, `precio_neto`/`owner_id` mapping, `23505` → `Ya existe un producto llamado "<nombre>"`, 0 rows → `OwnershipError`); `src/data/supabase/productsRepo.ts` (`list()` RLS-visible with no owner filter; `listOwn(userId)` `.eq('owner_id', userId)`; `.select('id')` on update/remove; `seedIfEmpty` owner-scoped count + upsert `onConflict: 'owner_id,nombre'`, `ignoreDuplicates`); optional `ownerId` on `Product`. RED: 2 new suites failed to resolve imports. GREEN: `pnpm coverage` `370 passed (370)` (38 files), coverage 69.65/65.83/72.77/71.11 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0. Route: delegated. Native RDD review (lineage `review-89249be67952bfee`, tier medium, 1 lens `review-reliability`) **approved** with no correction; 2 advisory SUGGESTIONs recorded below. Commit: `3ca88f1d329a5200fd06cc915abaa99c6cc135d8`. |
 | T7 | done | `src/data/ProductsCache.ts` (`useSyncExternalStore` store over `Product[] \| undefined`); `src/data/DataProvider.tsx` + `useData.ts` (refresh on mount StrictMode-safe, `visibilitychange→visible`, `window online`, and after every mutation; retains the last snapshot on error); `src/data/local/draftsRepo.ts` (`produclist:quoteDraft`); `src/data/testing/inMemoryRepos.ts` + `stub.ts` (RLS-mirroring fakes with `{ userId, isAdmin }` admin global read, `OwnershipError` on foreign writes) seeded with the 44 `seedProducts`; `vitest.config.ts` excludes `src/data/testing/**`. RED: 5 new suites failed to resolve imports. GREEN: `pnpm coverage` `411 passed (411)` (43 files), coverage 70.96/66.18/74.25/72.37 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0. Route: delegated (planned inline). Native RDD review (lineage `review-4ddb0f0a0e81957f`, tier medium, 1 lens `review-reliability`) **approved**, no correction; 4 advisory findings recorded below. Commit: `adaaaefec4f30e357bdace4896e4652fd4681223`. |
 | T8 | done | Moved the product hooks (`useProducts`/`useAddProduct`/`useUpdateProduct`/`useDeleteProduct`) onto `useData()`/`ProductsRepo` (Dexie removed); `useQuote` uses the local `DraftsRepo`; `QuoteProductSelector`, `ProductPDFDocument` (prop-only) and `PDFButton` read products from the seam; `Root` wires `DataProvider` (real Supabase repos or `VITE_E2E` fakes) around `App`; `App` drops `seedDatabase()`. Fixes T7's `R3-1` (refresh ordering) and `R3-2` (draftsRepo shape). RED: 8 T8 test files failed. GREEN: `pnpm coverage` `433 passed (433)` (47 files), coverage 78.53/69.88/81.29/76.81 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0; `pnpm exec playwright test` 18 passed. Route: delegated (planned inline). Native RDD review (lineage `review-c0c9a9500e909a38`, tier medium, 1 lens `review-reliability`) **approved**, no correction; 3 advisory findings recorded below. Commit: `e81ee73c1d0ed1ba2a8d824a66302a43718e5473`. |
-| T9 | pending | – |
+| T9 | done | `src/data/ports.ts` (`QuoteInput`/`ListSendInput`, `QuotesRepo`, `ListSendsRepo`, `ClientsRepo`; `Repositories` deliberately left `{ products }`, composed in T10); `src/data/supabase/quotesRepo.ts`/`listSendsRepo.ts` (RLS-visible `list()` + owner-scoped `listOwn()`, fecha desc; `create` `.select().single()` mapped; `remove` `.select('id')` + `assertRowAffected` → `OwnershipError`); `clientsRepo.ts` (`listNames()` = RLS-visible union of `cotizaciones` + `listas_enviadas` via `mergeClientNames`); `rows.ts` (`QuoteRow`/`QuoteInsert`, `ListSendRow`/`ListSendInsert`); `mappers.ts` (`rowToSavedQuote`, `quoteInputToInsert`, `rowToListSend`, `listSendInputToInsert`); `src/utils/clientNames.ts` (`mergeClientNames` extracted from `getClientNames`); `SavedQuote`/`QuoteDraft`/`DRAFT_KEY` moved to `src/types/quote.ts` (back-compat re-exports in `database.ts`); optional `ownerId` on `SavedQuote`/`ListSend`; `clientTracking.ts` import decoupled from Dexie; T8 `R3-1` hardened (`Array.isArray(draft.items)` guard in repo + hook; save/clear try/catch). RED: 7 suites failed. GREEN: `pnpm coverage` `479 passed (479)` (52 files), 77.5/70.6/82.11/79.2 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0. Route: delegated. Native RDD review (lineage `review-56edd248e6a7622b`, tier medium, 1 lens `review-reliability`) **approved**, no correction; 3 advisory findings recorded below. Commit: `828f90a74b7c9cb1c03fec6c84c26eefeaa003a9`. |
 | T10 | pending | – |
 | T11 | pending | – |
 | T12 | pending | – |
@@ -732,6 +736,47 @@ work, never as a reason to re-review this candidate.
 - `R3-3` (SUGGESTION, `src/components/PDFButton.tsx:15`) — `products ?? []` folds the
   pre-first-load `undefined` into an empty PDF instead of a loading state.
 
+### T9 evidence detail
+
+- **Deliverables**: `src/data/ports.ts` (`QuoteInput`, `ListSendInput`, `QuotesRepo`,
+  `ListSendsRepo`, `ClientsRepo`; `listOwn(userId)` mirrors the T6 realization);
+  `src/data/supabase/quotesRepo.ts` + `listSendsRepo.ts` (RLS-visible `list()`,
+  owner-scoped `listOwn()`, both fecha desc; `create` → `.select().single()` mapped row;
+  `remove` → `.delete().eq('id').select('id')` + `assertRowAffected` →
+  `OwnershipError`); `src/data/supabase/clientsRepo.ts` (`listNames()` merges the
+  RLS-visible `cotizaciones` + `listas_enviadas` rows via `mergeClientNames`);
+  `src/data/supabase/rows.ts` (`QuoteRow`/`QuoteInsert`, `ListSendRow`/`ListSendInsert`);
+  `src/data/supabase/mappers.ts` (`rowToSavedQuote`, `quoteInputToInsert`,
+  `rowToListSend`, `listSendInputToInsert`); `src/utils/clientNames.ts`
+  (`mergeClientNames` extracted from `getClientNames`); `SavedQuote`/`QuoteDraft`/
+  `DRAFT_KEY` moved into `src/types/quote.ts` (with back-compat re-exports in
+  `database.ts`); optional `ownerId` on `SavedQuote`/`ListSend`; `clientTracking.ts`
+  import decoupled from Dexie; T8 `R3-1` hardened (`Array.isArray(draft.items)` guard in
+  `draftsRepo.load()` and the `useQuote` mount initializer; debounced save/clear wrapped
+  in try/catch).
+- **Deliberate scope boundary**: `Repositories` stays `{ products }`; composing the new
+  repos (and their in-memory fakes / `createSupabaseRepositories`) is T10.
+- **Route**: delegated (mirrors T6; frozen contracts, structural stub-client tests).
+- **Native RDD review**: lineage `review-56edd248e6a7622b`, tier medium, 1 lens
+  (`review-reliability`), `approved` with **no correction**; 3 advisory findings below.
+- **Branch / PR**: `feat/quotes-repos` → PR base = tracker
+  `feat/phase-1-supabase-migration`.
+- **Commit**: `828f90a74b7c9cb1c03fec6c84c26eefeaa003a9` —
+  `feat(data): add quotes, list-sends and clients repository adapters`.
+
+### Advisory findings from the T9 review (non-blocking)
+
+- `R3-AUTODATE-CONTRACT` (WARNING, `src/data/supabase/mappers.ts:94`) —
+  `quoteInputToInsert`/`listSendInputToInsert` fall back to the device clock when
+  `fecha` is omitted, so the DB default is unreachable and ordering (fecha desc) depends
+  on clock skew; the omitted-date branch is untested. Worth settling in T10.
+- `R3-OWNERID-SILENT-DROP` (SUGGESTION, `src/data/ports.ts:36`) — `QuoteInput`
+  inherits optional `ownerId` but `create` ignores it and relies on auth.uid(); a
+  payload-supplied `ownerId` is silently dropped.
+- `R3-CREATE-NULL-ROW` (SUGGESTION, `src/data/supabase/quotesRepo.ts:68`) — `create`
+  dereferences the `.single()` row without a null guard (same class as T6's
+  `R3-create-payload`).
+
 Operational milestones (not authored work units):
 
 - M1 (pre-cutover): slice 1 merged to `master`; tracker slices green; dev-project
@@ -742,11 +787,11 @@ Operational milestones (not authored work units):
   seed, imports their own v3 file; per-user verification above passes.
 - M4 (go-live gate): upgrade to Pro or sign off the exception (owner: Piwen).
 
-**Next step**: T9 (quotes / list-sends / clients adapters + client-name merge),
-consuming the `Repositories` contract. T8 is closed — reviewed (approved) with 3
-advisory findings recorded above (notably `R3-1` draft-shape hardening). Before
-cutover, re-run the T3 RLS probe against the linked dev project (Decision 14) and run
-the regression sweep (`pnpm lint`, `pnpm exec tsc -b`, `pnpm coverage`,
+**Next step**: T10 (wire quotes / list-sends / clients through the repos; extend
+`Repositories` and the in-memory fakes; owner-scoped `createBackupService`). T9 is
+closed — reviewed (approved) with 3 advisory findings recorded above. Before cutover,
+re-run the T3 RLS probe against the linked dev project (Decision 14) and run the
+regression sweep (`pnpm lint`, `pnpm exec tsc -b`, `pnpm coverage`,
 `pnpm exec playwright test`).
 
 ## Delivery strategy + slice boundaries
