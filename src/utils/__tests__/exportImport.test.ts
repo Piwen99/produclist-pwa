@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { parseProductImport, previewImport, applyImport } from '../exportImport';
+import {
+  parseProductImport,
+  previewImport,
+  applyImport,
+  listSendSignature,
+  BACKUP_VERSION,
+} from '../exportImport';
 import { db } from '../../db/database';
 import type { ProductInput } from '../../types/product';
 
@@ -185,5 +191,145 @@ describe('backup v2 (products + quotes)', () => {
   it('preview writes no quotes either', async () => {
     await previewImport(backupV2([], [sampleQuote]));
     expect(await db.quotes.count()).toBe(0);
+  });
+
+  it('defaults listSends to [] for a v2 backup (no listSends field)', () => {
+    const { listSends } = parseProductImport(backupV2([validProduct], [sampleQuote]));
+    expect(listSends).toHaveLength(0);
+  });
+
+  it('still accepts a v1 bare array with no list sends', () => {
+    const { valid, listSends } = parseProductImport(JSON.stringify([validProduct]));
+    expect(valid).toHaveLength(1);
+    expect(listSends).toHaveLength(0);
+  });
+});
+
+const sampleSend = {
+  fecha: new Date('2026-09-22T10:00:00.000Z'),
+  cliente: '  Acme SpA ',
+  items: [
+    {
+      nombre: 'ALMENDRA LAMINADA',
+      formato: '11,34',
+      precioNeto: 9200,
+      precioBruto: 10948,
+    },
+  ],
+};
+
+const backupV3 = (products: unknown[], quotes: unknown[], listSends: unknown[]) =>
+  JSON.stringify({
+    version: 3,
+    exportedAt: '2026-10-05T12:00:00.000Z',
+    products,
+    quotes,
+    listSends,
+  });
+
+describe('listSendSignature', () => {
+  it('normalizes fecha to ISO and cliente to trimmed + lowercased', () => {
+    expect(listSendSignature(sampleSend)).toBe(
+      JSON.stringify({
+        fecha: '2026-09-22T10:00:00.000Z',
+        cliente: 'acme spa',
+        items: [
+          {
+            nombre: 'ALMENDRA LAMINADA',
+            formato: '11,34',
+            precioNeto: 9200,
+            precioBruto: 10948,
+          },
+        ],
+      })
+    );
+  });
+
+  it('ignores the id: the same send with a different id shares a signature', () => {
+    expect(listSendSignature({ ...sampleSend, id: 1 })).toBe(
+      listSendSignature({ ...sampleSend, id: 999 })
+    );
+  });
+});
+
+describe('backup v3 (products + quotes + listSends)', () => {
+  beforeEach(async () => {
+    await db.products.clear();
+    await db.quotes.clear();
+    await db.listSends.clear();
+  });
+
+  it('writes version 3', () => {
+    expect(BACKUP_VERSION).toBe(3);
+  });
+
+  it('parses list sends from a v3 backup', () => {
+    const { listSends, errors } = parseProductImport(
+      backupV3([validProduct], [sampleQuote], [sampleSend])
+    );
+    expect(errors).toHaveLength(0);
+    expect(listSends).toHaveLength(1);
+    expect(listSends[0].cliente).toBe('  Acme SpA ');
+    expect(listSends[0].items[0].nombre).toBe('ALMENDRA LAMINADA');
+  });
+
+  it('previews and applies unseen list sends', async () => {
+    const preview = await previewImport(backupV3([], [], [sampleSend]));
+    expect(preview.listSendsToAdd).toHaveLength(1);
+
+    const result = await applyImport(preview);
+    expect(result.listSendsAdded).toBe(1);
+
+    const stored = await db.listSends.toArray();
+    expect(stored).toHaveLength(1);
+    expect(stored[0].cliente).toBe('  Acme SpA ');
+    expect(stored[0].items[0].precioBruto).toBe(10948);
+  });
+
+  it('re-importing the same v3 file is a no-op (idempotent)', async () => {
+    await applyImport(await previewImport(backupV3([], [], [sampleSend])));
+
+    const second = await previewImport(backupV3([], [], [sampleSend]));
+    expect(second.listSendsToAdd).toHaveLength(0);
+
+    const result = await applyImport(second);
+    expect(result.listSendsAdded).toBe(0);
+    expect(await db.listSends.count()).toBe(1);
+  });
+
+  it('merges by signature: only unseen sends are added', async () => {
+    await applyImport(await previewImport(backupV3([], [], [sampleSend])));
+
+    const different = {
+      ...sampleSend,
+      fecha: new Date('2026-09-23T10:00:00.000Z'),
+    };
+    const preview = await previewImport(
+      backupV3([], [], [{ ...sampleSend, id: 42 }, different])
+    );
+    expect(preview.listSendsToAdd).toHaveLength(1);
+
+    const result = await applyImport(preview);
+    expect(result.listSendsAdded).toBe(1);
+    expect(await db.listSends.count()).toBe(2);
+  });
+
+  it('applyImport only adds list sends whose signature is still unseen', async () => {
+    await applyImport(await previewImport(backupV3([], [], [sampleSend])));
+
+    // A stale preview that still carries the already-stored send must not
+    // duplicate it when applied again.
+    const stalePreview = await previewImport(backupV3([], [], [{ ...sampleSend, id: 7 }]));
+    expect(stalePreview.listSendsToAdd).toHaveLength(0);
+
+    const forged = { ...stalePreview, listSendsToAdd: [{ ...sampleSend, id: 7 }] };
+    const result = await applyImport(forged);
+    expect(result.listSendsAdded).toBe(0);
+    expect(await db.listSends.count()).toBe(1);
+  });
+
+  it('preview writes no list sends either', async () => {
+    await previewImport(backupV3([], [], [sampleSend]));
+    expect(await db.listSends.count()).toBe(0);
   });
 });
