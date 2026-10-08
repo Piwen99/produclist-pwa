@@ -377,8 +377,10 @@ screen and the credential-free `VITE_E2E` e2e gate; checks green; native RDD
 review **approved** and acknowledged after one bounded correction of a CRITICAL
 auth-bootstrap race). T6 complete (repository ports + Supabase products adapter with a
 hand-rolled `from()` stub; checks green; native RDD review **approved**, no
-correction needed). T7–T12 pending. No code, tests, builds or installs were run
-for T7–T12.
+correction needed). T7 complete (products cache, `DataProvider` refresh paths, local
+drafts repo and the `VITE_E2E` in-memory fakes; checks green; native RDD review
+**approved**, no correction). T8–T12 pending. No code, tests, builds or installs
+were run for T8–T12.
 
 | Task | Status | Evidence |
 |------|--------|----------|
@@ -388,7 +390,7 @@ for T7–T12.
 | T4 | done | Added `@supabase/supabase-js@2.117.3`. RED → GREEN: `pnpm coverage` `Tests 315 passed (315)`, coverage 66.82/63.52/68.99/68.1 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0 (orchestrator spot-check re-ran all three green). Native RDD review (lineage `review-82edf347033c4b7c`, tier high, 4 lenses) **approved** and acknowledged; 11 non-blocking advisory findings recorded as T5 follow-ups. Route: delegated. Commit: `d36f9ed338c03b1d279ca1d03d3adbb5eef0709c`. |
 | T5 | done | `src/auth/AuthProvider.tsx` + `useAuth.ts` (status machine `loading/authenticated/unauthenticated` over the frozen `AuthPort`, race-guarded bootstrap); `LoginScreen.tsx` (Spanish copy, generic invalid-credentials error); `testing/fakeAuth.ts` (`createFakeAuth` + `createE2eAuth`); `Root.tsx` composition root (real Supabase port or `VITE_E2E=1` fake; config-error screen when env missing; gate); `main.tsx` renders `Root`; `App.tsx` "Cerrar sesión"; `playwright.config.ts` `webServer.env.VITE_E2E=1`; `e2e/auth.spec.ts`. RED: 4 new test files failed to resolve imports (`Test Files 4 failed \| 32 passed`, exit 1). GREEN: `pnpm coverage` `344 passed (344)` (36 files), coverage 69.03/65.03/71.6/70.17 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0; `pnpm exec playwright test` 18 passed. Route: delegated (writer trigger: 10 new/modified non-trivial files). Native RDD review (lineage `review-691a232b1dab8818`, tier high, 4 lenses) **approved** and acknowledged after one bounded correction of CRITICAL `R3-auth-race` (`eventApplied` guard); 11 non-blocking advisory findings recorded below. Commit: `37566acf43c0d3c721dc043cc474372239a2d4fa`. |
 | T6 | done | `src/data/ports.ts` (`OwnershipError`, `ProductsRepo` list/listOwn/create/update/remove/seedIfEmpty, `Repositories`); `src/data/supabase/rows.ts` + `mappers.ts` (snake_case `ProductRow`, `precio_neto`/`owner_id` mapping, `23505` → `Ya existe un producto llamado "<nombre>"`, 0 rows → `OwnershipError`); `src/data/supabase/productsRepo.ts` (`list()` RLS-visible with no owner filter; `listOwn(userId)` `.eq('owner_id', userId)`; `.select('id')` on update/remove; `seedIfEmpty` owner-scoped count + upsert `onConflict: 'owner_id,nombre'`, `ignoreDuplicates`); optional `ownerId` on `Product`. RED: 2 new suites failed to resolve imports. GREEN: `pnpm coverage` `370 passed (370)` (38 files), coverage 69.65/65.83/72.77/71.11 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0. Route: delegated. Native RDD review (lineage `review-89249be67952bfee`, tier medium, 1 lens `review-reliability`) **approved** with no correction; 2 advisory SUGGESTIONs recorded below. Commit: `3ca88f1d329a5200fd06cc915abaa99c6cc135d8`. |
-| T7 | pending | – |
+| T7 | done | `src/data/ProductsCache.ts` (`useSyncExternalStore` store over `Product[] \| undefined`); `src/data/DataProvider.tsx` + `useData.ts` (refresh on mount StrictMode-safe, `visibilitychange→visible`, `window online`, and after every mutation; retains the last snapshot on error); `src/data/local/draftsRepo.ts` (`produclist:quoteDraft`); `src/data/testing/inMemoryRepos.ts` + `stub.ts` (RLS-mirroring fakes with `{ userId, isAdmin }` admin global read, `OwnershipError` on foreign writes) seeded with the 44 `seedProducts`; `vitest.config.ts` excludes `src/data/testing/**`. RED: 5 new suites failed to resolve imports. GREEN: `pnpm coverage` `411 passed (411)` (43 files), coverage 70.96/66.18/74.25/72.37 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0. Route: delegated (planned inline). Native RDD review (lineage `review-4ddb0f0a0e81957f`, tier medium, 1 lens `review-reliability`) **approved**, no correction; 4 advisory findings recorded below. Commit: `adaaaefec4f30e357bdace4896e4652fd4681223`. |
 | T8 | pending | – |
 | T9 | pending | – |
 | T10 | pending | – |
@@ -668,6 +670,38 @@ work, never as a reason to re-review this candidate.
 - `R3-update-error-mapping` (SUGGESTION, `src/data/supabase/productsRepo.ts:83`) — the
   update rename-collision `23505` branch is not exercised by the repo tests.
 
+### T7 evidence detail
+
+- **Deliverables**: `src/data/ProductsCache.ts` (`createProductsCache`,
+  `useProductsSnapshot` over `useSyncExternalStore`); `src/data/DataProvider.tsx` +
+  `src/data/useData.ts`; `src/data/local/draftsRepo.ts` (`DraftsRepo`,
+  `produclist:quoteDraft`); `src/data/testing/inMemoryRepos.ts` (`Principal`,
+  `createInMemoryProductsRepo`, `createInMemoryRepositories`) + `stub.ts`
+  (`createE2eRepositories`); `vitest.config.ts` coverage exclusion.
+- **Route**: planned inline; **executed delegated** (writer trigger: 7 new/edited
+  non-trivial files + tests).
+- **Native RDD review**: lineage `review-4ddb0f0a0e81957f`, tier medium, 1 lens
+  (`review-reliability`), `approved` with **no correction**; 4 advisory findings below.
+- **T11 wiring note**: `stub.ts` imports `seedProducts` from `src/db/seed.ts` (pulls
+  Dexie at runtime); **T11 relocates the constant to `src/data/seedProducts.ts` and
+  updates the import**.
+- **Branch / PR**: `feat/data-provider` → **PR #45**, base = `feat/products-repo` (PR5).
+- **Commit**: `adaaaefec4f30e357bdace4896e4652fd4681223` —
+  `feat(data): add products cache, DataProvider and e2e fakes`.
+
+### Advisory findings from the T7 review (non-blocking)
+
+- `R3-1` (WARNING, `src/data/DataProvider.tsx:22-29`) — `refresh()` has no in-flight
+  sequence guard, so two overlapping `list()` calls can resolve out of order and a
+  stale response can overwrite a newer snapshot. **Worth fixing in T8.**
+- `R3-2` (WARNING, `src/data/local/draftsRepo.ts:25-27`) — `load()` spreads any
+  parseable JSON, so a non-object payload (`null`/number/array) becomes a malformed
+  draft instead of `null`, contradicting the documented contract. **Worth fixing.**
+- `R3-3` (WARNING, `src/data/DataProvider.tsx:26-28`) — a first-load rejection leaves
+  `products` undefined with no error surface or retry.
+- `R3-4` (SUGGESTION, `src/data/DataProvider.tsx:51-74`) — no tests for a rejected
+  write or for a write whose follow-up refresh rejects.
+
 Operational milestones (not authored work units):
 
 - M1 (pre-cutover): slice 1 merged to `master`; tracker slices green; dev-project
@@ -678,11 +712,12 @@ Operational milestones (not authored work units):
   seed, imports their own v3 file; per-user verification above passes.
 - M4 (go-live gate): upgrade to Pro or sign off the exception (owner: Piwen).
 
-**Next step**: T7 (products cache, `DataProvider`, local drafts repo, in-memory fakes +
-e2e stub), consuming the frozen `ProductsRepo` contract and adapting the real
-`SupabaseClient` at the wiring seam. T6 is closed — reviewed (approved) with only 2
-advisory SUGGESTIONs recorded above. Before cutover, re-run the T3 RLS probe against
-the linked dev project (Decision 14) and run the regression sweep (`pnpm lint`,
+**Next step**: T8 (swap the product/data hooks and components onto the ports; local
+drafts; PDF path), consuming `useData`/`ProductsRepo` and adapting the real
+`SupabaseClient` at the wiring seam. T7 is closed — reviewed (approved) with 4
+advisory findings recorded above (notably `R3-1` refresh ordering and `R3-2`
+draft-shape validation). Before cutover, re-run the T3 RLS probe against the linked
+dev project (Decision 14) and run the regression sweep (`pnpm lint`,
 `pnpm exec tsc -b`, `pnpm coverage`, `pnpm exec playwright test`).
 
 ## Delivery strategy + slice boundaries
