@@ -11,6 +11,7 @@ export interface Product {
   formato: string;
   precioNeto: number;
   disponible: boolean;
+  ownerId?: string;
 }
 
 export interface ProductInput {

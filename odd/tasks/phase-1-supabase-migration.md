@@ -375,8 +375,10 @@ review **approved** and acknowledged). The tracker was synced with `master`
 (merged #40) on 2026-10-08. T5 complete (auth gate, login/logout, config-error
 screen and the credential-free `VITE_E2E` e2e gate; checks green; native RDD
 review **approved** and acknowledged after one bounded correction of a CRITICAL
-auth-bootstrap race). T6–T12 pending. No code, tests, builds or installs were
-run for T6–T12.
+auth-bootstrap race). T6 complete (repository ports + Supabase products adapter with a
+hand-rolled `from()` stub; checks green; native RDD review **approved**, no
+correction needed). T7–T12 pending. No code, tests, builds or installs were run
+for T7–T12.
 
 | Task | Status | Evidence |
 |------|--------|----------|
@@ -385,7 +387,7 @@ run for T6–T12.
 | T3 | done | Authored `supabase/config.toml` (CLI 2.101.0: `project_id="produclist"`, `enable_signup=false` on `[auth]` and `[auth.email]`, `[db.seed] enabled=false`) + `supabase/migrations/20261005000000_init.sql`, then hardened grants: Supabase's default privileges empirically grant `anon` ALL (incl. `TRUNCATE`, not RLS-filtered), so the migration now `revoke all ... from anon` and trims `authenticated` to SELECT/INSERT/UPDATE/DELETE. Verified on local stack (`supabase start` + `supabase db reset`, PG 17.6): apply clean; probe PASS — anon 0 grants and denied (clean table-ACL error); vendor sees only own (1); foreign UPDATE → 0 rows; duplicate own name → 23505; another owner may reuse the name; admin `is_admin()=true` reads all owners (2); trigger sets `rol='vendedor'`; `owner_id` = self on insert; no `42P17`. Route: inline. Commit: `4595001be9a93e0df82845eb7c8fbc572983121d`. |
 | T4 | done | Added `@supabase/supabase-js@2.117.3`. RED → GREEN: `pnpm coverage` `Tests 315 passed (315)`, coverage 66.82/63.52/68.99/68.1 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0 (orchestrator spot-check re-ran all three green). Native RDD review (lineage `review-82edf347033c4b7c`, tier high, 4 lenses) **approved** and acknowledged; 11 non-blocking advisory findings recorded as T5 follow-ups. Route: delegated. Commit: `d36f9ed338c03b1d279ca1d03d3adbb5eef0709c`. |
 | T5 | done | `src/auth/AuthProvider.tsx` + `useAuth.ts` (status machine `loading/authenticated/unauthenticated` over the frozen `AuthPort`, race-guarded bootstrap); `LoginScreen.tsx` (Spanish copy, generic invalid-credentials error); `testing/fakeAuth.ts` (`createFakeAuth` + `createE2eAuth`); `Root.tsx` composition root (real Supabase port or `VITE_E2E=1` fake; config-error screen when env missing; gate); `main.tsx` renders `Root`; `App.tsx` "Cerrar sesión"; `playwright.config.ts` `webServer.env.VITE_E2E=1`; `e2e/auth.spec.ts`. RED: 4 new test files failed to resolve imports (`Test Files 4 failed \| 32 passed`, exit 1). GREEN: `pnpm coverage` `344 passed (344)` (36 files), coverage 69.03/65.03/71.6/70.17 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0; `pnpm exec playwright test` 18 passed. Route: delegated (writer trigger: 10 new/modified non-trivial files). Native RDD review (lineage `review-691a232b1dab8818`, tier high, 4 lenses) **approved** and acknowledged after one bounded correction of CRITICAL `R3-auth-race` (`eventApplied` guard); 11 non-blocking advisory findings recorded below. Commit: `37566acf43c0d3c721dc043cc474372239a2d4fa`. |
-| T6 | pending | – |
+| T6 | done | `src/data/ports.ts` (`OwnershipError`, `ProductsRepo` list/listOwn/create/update/remove/seedIfEmpty, `Repositories`); `src/data/supabase/rows.ts` + `mappers.ts` (snake_case `ProductRow`, `precio_neto`/`owner_id` mapping, `23505` → `Ya existe un producto llamado "<nombre>"`, 0 rows → `OwnershipError`); `src/data/supabase/productsRepo.ts` (`list()` RLS-visible with no owner filter; `listOwn(userId)` `.eq('owner_id', userId)`; `.select('id')` on update/remove; `seedIfEmpty` owner-scoped count + upsert `onConflict: 'owner_id,nombre'`, `ignoreDuplicates`); optional `ownerId` on `Product`. RED: 2 new suites failed to resolve imports. GREEN: `pnpm coverage` `370 passed (370)` (38 files), coverage 69.65/65.83/72.77/71.11 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0. Route: delegated. Native RDD review (lineage `review-89249be67952bfee`, tier medium, 1 lens `review-reliability`) **approved** with no correction; 2 advisory SUGGESTIONs recorded below. Commit: `3ca88f1d329a5200fd06cc915abaa99c6cc135d8`. |
 | T7 | pending | – |
 | T8 | pending | – |
 | T9 | pending | – |
@@ -637,6 +639,35 @@ work, never as a reason to re-review this candidate.
 - `R4-C` (SUGGESTION, `src/auth/LoginScreen.tsx`) — every sign-in failure maps to the
   generic message with no logging, so outages look like bad credentials.
 
+### T6 evidence detail
+
+- **Deliverables**: `src/data/ports.ts` (`OwnershipError`, `ProductsRepo`,
+  `Repositories`); `src/data/supabase/rows.ts` (`ProductRow`, `ProductInsert`);
+  `mappers.ts` (`rowToProduct`, `productInputToInsert`, `productChangesToRow`,
+  `isUniqueViolation`, `duplicateProductMessage`, `mapPostgrestError`,
+  `assertRowAffected`); `productsRepo.ts` (`createProductsRepo(client)` over a narrow
+  structural `ProductsClient`); optional `ownerId` on `Product`.
+- **Route**: delegated (frozen interface, independent adapter, hand-rolled `from()`
+  stub tests, no UI decisions).
+- **Native RDD review**: lineage `review-89249be67952bfee`, tier medium, **1 lens**
+  (`review-reliability`), `approved` on the first pass with **no correction**; 2
+  advisory SUGGESTIONs recorded below.
+- **T7 wiring note**: the `SupabaseClient` default `any` DB generic trips
+  `no-unsafe-assignment` under `strictTypeChecked`, so the adapter consumes a typed
+  structural `ProductsClient`; **T7 must adapt/cast the real client at the wiring
+  seam**.
+- **Branch / PR**: `feat/products-repo` → **PR #44**, base = `feat/auth-ui` (PR4).
+- **Commit**: `3ca88f1d329a5200fd06cc915abaa99c6cc135d8` —
+  `feat(data): add repository ports and Supabase products adapter`.
+
+### Advisory findings from the T6 review (non-blocking)
+
+- `R3-create-payload` (SUGGESTION, `src/data/supabase/productsRepo.ts:74`) —
+  `create()` dereferences the success row without a guard; a `data:null,error:null`
+  payload would surface a raw `TypeError` instead of the mapped `Error`.
+- `R3-update-error-mapping` (SUGGESTION, `src/data/supabase/productsRepo.ts:83`) — the
+  update rename-collision `23505` branch is not exercised by the repo tests.
+
 Operational milestones (not authored work units):
 
 - M1 (pre-cutover): slice 1 merged to `master`; tracker slices green; dev-project
@@ -647,11 +678,12 @@ Operational milestones (not authored work units):
   seed, imports their own v3 file; per-user verification above passes.
 - M4 (go-live gate): upgrade to Pro or sign off the exception (owner: Piwen).
 
-**Next step**: T6 (repository ports + Supabase products adapter + mappers/errors),
-consuming the frozen `Repositories` contract. T5 is closed — reviewed (approved) and
-its 11 advisory findings are listed above for T6+ to weigh. Before cutover, re-run the
-T3 RLS probe against the linked dev project (Decision 14) and run the regression sweep
-(`pnpm lint`, `pnpm exec tsc -b`, `pnpm coverage`, `pnpm exec playwright test`).
+**Next step**: T7 (products cache, `DataProvider`, local drafts repo, in-memory fakes +
+e2e stub), consuming the frozen `ProductsRepo` contract and adapting the real
+`SupabaseClient` at the wiring seam. T6 is closed — reviewed (approved) with only 2
+advisory SUGGESTIONs recorded above. Before cutover, re-run the T3 RLS probe against
+the linked dev project (Decision 14) and run the regression sweep (`pnpm lint`,
+`pnpm exec tsc -b`, `pnpm coverage`, `pnpm exec playwright test`).
 
 ## Delivery strategy + slice boundaries
 
