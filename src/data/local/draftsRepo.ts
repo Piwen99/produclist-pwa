@@ -1,4 +1,4 @@
-import type { QuoteDraft } from '../../db/database';
+import type { QuoteDraft } from '../../types/quote';
 
 export interface DraftsRepo {
   /** Returns the stored draft, or null when absent or unreadable. */
@@ -27,7 +27,9 @@ export function createLocalDraftsRepo(
         if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
           return null;
         }
-        return { id: 'draft', ...(parsed as Omit<QuoteDraft, 'id'>) };
+        const candidate = parsed as Omit<QuoteDraft, 'id'>;
+        if (!Array.isArray(candidate.items)) return null;
+        return { id: 'draft', ...candidate };
       } catch {
         return null;
       }

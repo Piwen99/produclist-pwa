@@ -22,4 +22,5 @@ export interface ListSend {
   fecha: Date;
   cliente: string;
   items: ListSendItem[];
+  ownerId?: string;
 }

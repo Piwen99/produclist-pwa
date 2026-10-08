@@ -1,7 +1,13 @@
 import Dexie, { type Table } from 'dexie';
 import type { Product, ProductInput } from '../types/product';
-import type { QuoteItem } from '../types/quote';
+import { DRAFT_KEY, type QuoteDraft, type SavedQuote } from '../types/quote';
 import type { ListSend } from '../types/listSend';
+import { mergeClientNames } from '../utils/clientNames';
+
+// Back-compat re-exports: the quote types now live in `types/quote`, but
+// existing importers (exportImport, QuoteHistory, tests) still reach them here.
+export { DRAFT_KEY } from '../types/quote';
+export type { QuoteDraft, SavedQuote } from '../types/quote';
 
 export class ProduclistDB extends Dexie {
   products!: Table<Product>;
@@ -34,29 +40,6 @@ export class ProduclistDB extends Dexie {
     });
   }
 }
-
-export interface SavedQuote {
-  id?: number;
-  fecha: Date;
-  /** Free text typed by the user; optional. */
-  cliente?: string;
-  items: QuoteItem[];
-  totalNeto: number;
-  iva: number;
-  total: number;
-}
-
-// Borrador de cotización (autosave): misma forma que SavedQuote pero sin
-// fecha y con una fila única de clave fija.
-export interface QuoteDraft {
-  id: 'draft';
-  items: QuoteItem[];
-  totalNeto: number;
-  iva: number;
-  total: number;
-}
-
-export const DRAFT_KEY = 'draft' as const;
 
 export const db = new ProduclistDB();
 
@@ -223,16 +206,5 @@ export async function getClientNames(): Promise<string[]> {
     db.listSends.toArray(),
   ]);
 
-  const byKey = new Map<string, string>();
-  for (const cliente of [
-    ...quotes.map((quote) => quote.cliente),
-    ...sends.map((send) => send.cliente),
-  ]) {
-    const name = cliente?.trim();
-    if (!name) continue;
-    const key = name.toLowerCase();
-    if (!byKey.has(key)) byKey.set(key, name);
-  }
-
-  return [...byKey.values()].sort((a, b) => a.localeCompare(b, 'es'));
+  return mergeClientNames(quotes, sends);
 }

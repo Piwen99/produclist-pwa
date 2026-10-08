@@ -93,6 +93,18 @@ describe('createLocalDraftsRepo', () => {
     expect(createLocalDraftsRepo().load()).toBeNull();
   });
 
+  it('returns null for a shapeless object without an items array', () => {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ totalNeto: 1, iva: 0, total: 1 }));
+
+    expect(createLocalDraftsRepo().load()).toBeNull();
+  });
+
+  it('returns null when items is present but not an array', () => {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ items: 'nope', totalNeto: 1 }));
+
+    expect(createLocalDraftsRepo().load()).toBeNull();
+  });
+
   it('honors a custom storage and key', () => {
     const storage = createMemoryStorage();
     const repo = createLocalDraftsRepo(storage, 'custom:key');
