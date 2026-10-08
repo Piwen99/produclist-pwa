@@ -388,7 +388,8 @@ draft-shape/autosave hardening; checks green; native RDD review **approved**, no
 correction). T10 complete (quotes / list-sends / clients wired through the
 repository ports, `createSupabaseRepositories`, owner-scoped `createBackupService`,
 extended in-memory fakes; checks green; native RDD review **approved**, no
-correction). T11–T12 pending. No code, tests, builds or installs were run for
+correction). Both T9 and T10 are **merged to the tracker** (#47 → #48; tracker at
+`d923d9b`). T11–T12 pending. No code, tests, builds or installs were run for
 T11–T12.
 
 | Task | Status | Evidence |
