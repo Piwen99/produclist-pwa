@@ -9,6 +9,7 @@ export default defineConfig({
     // Portable: relies on pnpm being on PATH (CI sets it up, local nvm users have it).
     // The previous `source ~/.nvm/...` failed under `sh`, which Playwright uses.
     command: 'pnpm dev --host 127.0.0.1',
+    env: { VITE_E2E: '1' },
     port: 5173,
     reuseExistingServer: !process.env.CI,
     timeout: 60000,

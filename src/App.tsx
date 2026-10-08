@@ -7,6 +7,7 @@ import { useUpdateProduct } from './hooks/useUpdateProduct';
 import { useDeleteProduct } from './hooks/useDeleteProduct';
 import { useQuote } from './hooks/useQuote';
 import { useToast } from './hooks/useToast';
+import { useAuth } from './auth/useAuth';
 import { ProductList } from './components/ProductList';
 import { ProductForm } from './components/ProductForm';
 import { PDFButton } from './components/PDFButton';
@@ -29,6 +30,7 @@ function App() {
   const { update } = useUpdateProduct();
   const { remove } = useDeleteProduct();
   const { toast } = useToast();
+  const { signOut } = useAuth();
 
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -144,6 +146,13 @@ function App() {
   const handleCancelListSend = useCallback(() => {
     setShowListSendForm(false);
   }, []);
+
+  const handleSignOut = useCallback(() => {
+    setShowMobileMenu(false);
+    void signOut().catch((error: unknown) => {
+      console.error('Error signing out:', error);
+    });
+  }, [signOut]);
 
   const handleImportClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -274,6 +283,15 @@ function App() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                       Guardar lista enviada
+                    </button>
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Cerrar sesión
                     </button>
                   </div>
                 )}
