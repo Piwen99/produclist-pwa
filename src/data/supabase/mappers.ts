@@ -1,6 +1,15 @@
 import type { Product, ProductInput } from '../../types/product';
-import { OwnershipError } from '../ports';
-import type { ProductInsert, ProductRow } from './rows';
+import type { SavedQuote } from '../../types/quote';
+import type { ListSend } from '../../types/listSend';
+import { OwnershipError, type QuoteInput, type ListSendInput } from '../ports';
+import type {
+  ListSendInsert,
+  ListSendRow,
+  ProductInsert,
+  ProductRow,
+  QuoteInsert,
+  QuoteRow,
+} from './rows';
 
 /** Minimal error shape shared by PostgREST responses. */
 export interface PostgrestErrorLike {
@@ -65,4 +74,48 @@ export function mapPostgrestError(error: PostgrestErrorLike, nombre?: string): E
 /** Rejects an UPDATE/DELETE that affected no rows (RLS filtered the target). */
 export function assertRowAffected(data: unknown): void {
   if (!Array.isArray(data) || data.length === 0) throw new OwnershipError();
+}
+
+export function rowToSavedQuote(row: QuoteRow): SavedQuote {
+  return {
+    id: row.id,
+    fecha: new Date(row.fecha),
+    cliente: row.cliente ?? undefined,
+    items: row.items,
+    totalNeto: row.total_neto,
+    iva: row.iva,
+    total: row.total,
+    ownerId: row.owner_id,
+  };
+}
+
+export function quoteInputToInsert(input: QuoteInput, ownerId?: string): QuoteInsert {
+  return {
+    fecha: (input.fecha ?? new Date()).toISOString(),
+    cliente: input.cliente ?? null,
+    items: input.items,
+    total_neto: input.totalNeto,
+    iva: input.iva,
+    total: input.total,
+    ...(ownerId === undefined ? {} : { owner_id: ownerId }),
+  };
+}
+
+export function rowToListSend(row: ListSendRow): ListSend {
+  return {
+    id: row.id,
+    fecha: new Date(row.fecha),
+    cliente: row.cliente,
+    items: row.items,
+    ownerId: row.owner_id,
+  };
+}
+
+export function listSendInputToInsert(input: ListSendInput, ownerId?: string): ListSendInsert {
+  return {
+    fecha: (input.fecha ?? new Date()).toISOString(),
+    cliente: input.cliente,
+    items: input.items,
+    ...(ownerId === undefined ? {} : { owner_id: ownerId }),
+  };
 }

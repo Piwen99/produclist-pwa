@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useQuote } from '../useQuote';
-import { createLocalDraftsRepo } from '../../data/local/draftsRepo';
+import { createLocalDraftsRepo, DRAFT_STORAGE_KEY } from '../../data/local/draftsRepo';
 import type { Product } from '../../types/product';
 import type { QuoteItem } from '../../types/quote';
 
@@ -284,12 +284,67 @@ describe('useQuote', () => {
 
     afterEach(() => {
       vi.useRealTimers();
+      vi.restoreAllMocks();
       localStorage.clear();
     });
 
     it('starts empty when no draft exists', async () => {
       const { result } = renderHook(() => useQuote());
       await waitFor(() => expect(result.current.items).toEqual([]));
+    });
+
+    it('ignores a shapeless stored payload without throwing', () => {
+      localStorage.setItem(
+        DRAFT_STORAGE_KEY,
+        JSON.stringify({ totalNeto: 1, iva: 0, total: 1 }),
+      );
+
+      const { result } = renderHook(() => useQuote());
+
+      expect(result.current.items).toEqual([]);
+    });
+
+    it('swallows a synchronous storage error on autosave instead of crashing', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const setSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('QuotaExceededError');
+      });
+
+      const { result } = renderHook(() => useQuote());
+      act(() => {
+        result.current.addItem(createMockProduct({ id: 1, nombre: 'Chía' }));
+      });
+
+      await waitFor(() => expect(errorSpy).toHaveBeenCalled(), { timeout: 4000 });
+      expect(result.current.items).toHaveLength(1);
+
+      setSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+
+    it('swallows a synchronous storage error on clear instead of crashing', async () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { result } = renderHook(() => useQuote());
+
+      act(() => {
+        result.current.addItem(createMockProduct({ id: 1, nombre: 'Chía' }));
+      });
+      await waitFor(() => {
+        expect(createLocalDraftsRepo().load()).not.toBeNull();
+      }, { timeout: 4000 });
+
+      const removeSpy = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+        throw new Error('SecurityError');
+      });
+      act(() => {
+        result.current.clearAll();
+      });
+
+      await waitFor(() => expect(errorSpy).toHaveBeenCalled(), { timeout: 4000 });
+      expect(result.current.items).toHaveLength(0);
+
+      removeSpy.mockRestore();
+      errorSpy.mockRestore();
     });
 
     it('restores items from a saved draft on mount', async () => {

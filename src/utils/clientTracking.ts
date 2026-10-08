@@ -1,5 +1,5 @@
 import type { ListSend } from '../types/listSend';
-import type { SavedQuote } from '../db/database';
+import type { SavedQuote } from '../types/quote';
 
 /** Where a price came from: a list sent to the client, or a quote. */
 export type ClientPriceSource = 'lista' | 'cotizacion';

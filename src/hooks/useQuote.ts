@@ -22,7 +22,7 @@ export function useQuote(): UseQuoteReturn {
   // restores the cart and there is no window where autosave could clobber it.
   const [items, setItems] = useState<QuoteItem[]>(() => {
     const draft = draftsRepo.load();
-    return draft && draft.items.length > 0 ? draft.items : [];
+    return draft && Array.isArray(draft.items) && draft.items.length > 0 ? draft.items : [];
   });
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const itemsRef = useRef<QuoteItem[]>(items);
@@ -62,10 +62,16 @@ export function useQuote(): UseQuoteReturn {
         iva: totals.iva,
         total: totals.total,
       };
-      if (draft.items.length === 0) {
-        draftsRepo.clear();
-      } else {
-        draftsRepo.save(draft);
+      try {
+        if (draft.items.length === 0) {
+          draftsRepo.clear();
+        } else {
+          draftsRepo.save(draft);
+        }
+      } catch (error) {
+        // localStorage can throw synchronously (quota, private mode); autosave
+        // is best-effort and must never crash the cotizador.
+        console.error('[useQuote] No se pudo guardar el borrador', error);
       }
     }, DRAFT_DEBOUNCE_MS);
 
