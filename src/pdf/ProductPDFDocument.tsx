@@ -1,6 +1,4 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { db } from '../db/database';
 import type { Product, Category } from '../types/product';
 import { calcPrecioBruto, calcTotal } from '../utils/price';
 
@@ -305,12 +303,11 @@ interface ProductPDFDocumentProps {
   products?: Product[];
 }
 
-export function ProductPDFDocument({ products: propProducts }: ProductPDFDocumentProps) {
-  const liveProducts = useLiveQuery(() => db.products.toArray(), []);
-  const products = (propProducts ?? liveProducts ?? []).filter(p => p.disponible);
+export function ProductPDFDocument({ products = [] }: ProductPDFDocumentProps) {
+  const visibleProducts = products.filter(p => p.disponible);
 
   const today = new Date();
-  const grouped = groupByCategory(products);
+  const grouped = groupByCategory(visibleProducts);
 
   // Compute cumulative indices so alternating colors flow across categories
   const categorySections = CATEGORY_ORDER.reduce<{ cat: Category; products: Product[]; startIndex: number }[]>((sections, cat) => {
@@ -349,7 +346,7 @@ export function ProductPDFDocument({ products: propProducts }: ProductPDFDocumen
 
         {/* Footer — normal flow, no overlap */}
         <Text style={styles.footer}>
-          Generado el {formatDate(today)} — Andes Granel — {products.length} productos
+          Generado el {formatDate(today)} — Andes Granel — {visibleProducts.length} productos
         </Text>
       </Page>
     </Document>

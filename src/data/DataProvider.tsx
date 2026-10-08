@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createProductsCache, useProductsSnapshot } from './ProductsCache';
 import type { Repositories } from './ports';
 import { DataContext, type DataContextValue } from './useData';
@@ -18,10 +18,15 @@ interface DataProviderProps {
 export function DataProvider({ repos, userId, children }: DataProviderProps) {
   const [cache] = useState(createProductsCache);
   const products = useProductsSnapshot(cache);
+  const refreshSeq = useRef(0);
 
   const refresh = useCallback(async () => {
+    const requestId = refreshSeq.current + 1;
+    refreshSeq.current = requestId;
     try {
       const next = await repos.products.list();
+      // Drop a stale response: only the latest in-flight refresh may write.
+      if (requestId !== refreshSeq.current) return;
       cache.set(next);
     } catch (error) {
       console.error('[DataProvider] Failed to refresh products', error);

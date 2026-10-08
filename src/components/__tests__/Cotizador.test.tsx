@@ -4,7 +4,10 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { Cotizador } from '../Cotizador';
 import { ToastProvider } from '../../hooks/ToastProvider';
+import { DataProvider } from '../../data/DataProvider';
+import { createInMemoryRepositories } from '../../data/testing/inMemoryRepos';
 import type { QuoteItem } from '../../types/quote';
+import type { ProductInput } from '../../types/product';
 
 vi.mock('@react-pdf/renderer', () => ({
   Document: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
@@ -26,10 +29,22 @@ const mockHandlers = {
   onRemove: vi.fn(),
 };
 
+const catalogSeed: ProductInput[] = [
+  { nombre: 'Almendra', categoria: 'Frutos Secos', formato: '11,34', precioNeto: 1134, disponible: true },
+];
+
 function renderCotizador(items: QuoteItem[] = [], totals = { totalKg: 0, subtotal: 0, iva: 0, total: 0 }) {
   return render(
     <ToastProvider>
-      <Cotizador items={items} totals={totals} {...mockHandlers} />
+      <DataProvider
+        repos={createInMemoryRepositories(
+          { userId: 'test-user', isAdmin: false },
+          catalogSeed,
+        )}
+        userId="test-user"
+      >
+        <Cotizador items={items} totals={totals} {...mockHandlers} />
+      </DataProvider>
     </ToastProvider>
   );
 }

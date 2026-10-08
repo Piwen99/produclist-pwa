@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AuthProvider } from './auth/AuthProvider';
 import { LoginScreen } from './auth/LoginScreen';
 import { useAuth } from './auth/useAuth';
 import { createE2eAuth } from './auth/testing/fakeAuth';
 import { createSupabaseAuth } from './auth/supabaseAuth';
 import { createSupabaseClient, readSupabaseConfig } from './data/supabase/client';
+import { createE2eRepositories } from './data/testing/stub';
+import { createProductsRepo, type ProductsClient } from './data/supabase/productsRepo';
+import { DataProvider } from './data/DataProvider';
+import type { Repositories } from './data/ports';
 import type { AuthPort } from './auth/ports';
 import App from './App';
 
@@ -16,6 +20,15 @@ function resolveAuthPort(): AuthPort | null {
     return null;
   }
   return createSupabaseAuth(createSupabaseClient());
+}
+
+function resolveRepositories(userId: string): Repositories {
+  if (import.meta.env.VITE_E2E === '1') {
+    return createE2eRepositories({ userId, isAdmin: false });
+  }
+  return {
+    products: createProductsRepo(createSupabaseClient() as unknown as ProductsClient),
+  };
 }
 
 function LoadingScreen() {
@@ -42,10 +55,20 @@ export function ConfigErrorScreen() {
 }
 
 function AuthGate() {
-  const { status } = useAuth();
+  const { status, session } = useAuth();
+  const repositories = useMemo(
+    () => (status === 'authenticated' && session ? resolveRepositories(session.userId) : null),
+    [status, session],
+  );
+
   if (status === 'loading') return <LoadingScreen />;
-  if (status === 'unauthenticated') return <LoginScreen />;
-  return <App />;
+  if (status === 'unauthenticated' || !session || !repositories) return <LoginScreen />;
+
+  return (
+    <DataProvider repos={repositories} userId={session.userId}>
+      <App />
+    </DataProvider>
+  );
 }
 
 export default function Root() {
