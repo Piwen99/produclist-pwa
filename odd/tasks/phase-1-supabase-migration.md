@@ -202,8 +202,9 @@ renumbered.
   `VITE_E2E=1` renders the config-error screen; no other UI change.
 - **Checks**: `pnpm coverage` (gate states + login success/error + sign-out with
   fake `AuthPort`), `pnpm lint`, `pnpm exec tsc -b`, `pnpm exec playwright test`.
-- **Route**: inline. Trigger: composition root and app-wide gate wiring across
-  `Root`/`main`/`App` plus an accepted UI delta.
+- **Route**: planned inline; **executed delegated** (writer trigger: 10
+  new/modified non-trivial files spanning the auth gate, composition root, hooks,
+  tests and e2e).
 - **Forecast**: ~220–320 authored lines incl. tests + e2e.
 
 ### T6 — Repository ports + Supabase products adapter + mappers/errors
@@ -370,8 +371,12 @@ T1 complete (Strict TDD, commit `b28240d7254017c7b09e4ec43cc96f53b8377b09`).
 T2 complete (commit recorded below). T3 authored and **verified on the local
 Supabase stack** (schema + RLS + grant hardening). T4 complete (client, env
 typing, auth port + adapter with stub-client unit tests; checks green; native RDD
-review **approved** and acknowledged). T5–T12 pending. No code, tests, builds or
-installs were run for T5–T12.
+review **approved** and acknowledged). The tracker was synced with `master`
+(merged #40) on 2026-10-08. T5 complete (auth gate, login/logout, config-error
+screen and the credential-free `VITE_E2E` e2e gate; checks green; native RDD
+review **approved** and acknowledged after one bounded correction of a CRITICAL
+auth-bootstrap race). T6–T12 pending. No code, tests, builds or installs were
+run for T6–T12.
 
 | Task | Status | Evidence |
 |------|--------|----------|
@@ -379,7 +384,7 @@ installs were run for T5–T12.
 | T2 | done | Copy-only delta. TDD exception: no runnable test path asserts the App import copy (no App unit test; e2e only covers responsive/diagnose), so RED was not observable. `pnpm coverage` 290/290 pass (thresholds 60/55/60/60 held: 65.8/62.17/67.73/67.21); `pnpm lint` clean; `pnpm exec tsc -b` exit 0; `pnpm exec playwright test` 14 passed. Route: inline (executed inline). Commit: `780d2e87e7f2f3020fcc2c7bdd62ffb247f7d2cd` |
 | T3 | done | Authored `supabase/config.toml` (CLI 2.101.0: `project_id="produclist"`, `enable_signup=false` on `[auth]` and `[auth.email]`, `[db.seed] enabled=false`) + `supabase/migrations/20261005000000_init.sql`, then hardened grants: Supabase's default privileges empirically grant `anon` ALL (incl. `TRUNCATE`, not RLS-filtered), so the migration now `revoke all ... from anon` and trims `authenticated` to SELECT/INSERT/UPDATE/DELETE. Verified on local stack (`supabase start` + `supabase db reset`, PG 17.6): apply clean; probe PASS — anon 0 grants and denied (clean table-ACL error); vendor sees only own (1); foreign UPDATE → 0 rows; duplicate own name → 23505; another owner may reuse the name; admin `is_admin()=true` reads all owners (2); trigger sets `rol='vendedor'`; `owner_id` = self on insert; no `42P17`. Route: inline. Commit: `4595001be9a93e0df82845eb7c8fbc572983121d`. |
 | T4 | done | Added `@supabase/supabase-js@2.117.3`. RED → GREEN: `pnpm coverage` `Tests 315 passed (315)`, coverage 66.82/63.52/68.99/68.1 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0 (orchestrator spot-check re-ran all three green). Native RDD review (lineage `review-82edf347033c4b7c`, tier high, 4 lenses) **approved** and acknowledged; 11 non-blocking advisory findings recorded as T5 follow-ups. Route: delegated. Commit: `d36f9ed338c03b1d279ca1d03d3adbb5eef0709c`. |
-| T5 | pending | – |
+| T5 | done | `src/auth/AuthProvider.tsx` + `useAuth.ts` (status machine `loading/authenticated/unauthenticated` over the frozen `AuthPort`, race-guarded bootstrap); `LoginScreen.tsx` (Spanish copy, generic invalid-credentials error); `testing/fakeAuth.ts` (`createFakeAuth` + `createE2eAuth`); `Root.tsx` composition root (real Supabase port or `VITE_E2E=1` fake; config-error screen when env missing; gate); `main.tsx` renders `Root`; `App.tsx` "Cerrar sesión"; `playwright.config.ts` `webServer.env.VITE_E2E=1`; `e2e/auth.spec.ts`. RED: 4 new test files failed to resolve imports (`Test Files 4 failed \| 32 passed`, exit 1). GREEN: `pnpm coverage` `344 passed (344)` (36 files), coverage 69.03/65.03/71.6/70.17 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0; `pnpm exec playwright test` 18 passed. Route: delegated (writer trigger: 10 new/modified non-trivial files). Native RDD review (lineage `review-691a232b1dab8818`, tier high, 4 lenses) **approved** and acknowledged after one bounded correction of CRITICAL `R3-auth-race` (`eventApplied` guard); 11 non-blocking advisory findings recorded below. Commit: `37566acf43c0d3c721dc043cc474372239a2d4fa`. |
 | T6 | pending | – |
 | T7 | pending | – |
 | T8 | pending | – |
@@ -582,6 +587,56 @@ installs were run for T5–T12.
   fold in.
 - **Commit**: `d36f9ed338c03b1d279ca1d03d3adbb5eef0709c` — `feat(supabase): add client and auth adapter`.
 
+### T5 evidence detail
+
+- **Deliverables**: `src/auth/AuthProvider.tsx` + `useAuth.ts` (auth context, status
+  machine `loading | authenticated | unauthenticated`), `src/auth/LoginScreen.tsx`
+  (email/password, Spanish copy, single generic error), `src/auth/testing/fakeAuth.ts`
+  (`createFakeAuth` for unit tests, `createE2eAuth` for `VITE_E2E`), `src/Root.tsx`
+  (composition root: real Supabase port, else the E2E fake; `ConfigErrorScreen` when
+  env is missing; gate `loading → LoginScreen → App`), `src/main.tsx` renders `Root`,
+  `src/App.tsx` "Cerrar sesión" in the hamburger menu, `playwright.config.ts`
+  `webServer.env: { VITE_E2E: '1' }`, `e2e/auth.spec.ts`.
+- **Route**: delegated (writer trigger: 10 new/modified non-trivial files).
+- **Native RDD correction**: the reliability lens found a CRITICAL candidate-caused
+  race in the provider bootstrap — an initial `getSession()` resolving or rejecting
+  after an `onAuthStateChange` event could clobber the fresher state. Fixed with an
+  `eventApplied` guard (the initial result is applied only when no event has landed)
+  plus two regression tests that interleave a pending `getSession()` with an emitted
+  session; `pnpm coverage` 344 green; the targeted validator admitted → `state:
+  approved`; authority burned.
+- **Branch / PR**: `feat/auth-ui`, PR4, base = the synced tracker branch
+  `feat/phase-1-supabase-migration`. Not pushed yet (pending user decision).
+- **Commit**: `37566acf43c0d3c721dc043cc474372239a2d4fa` —
+  `feat(auth): gate the app behind Supabase login`.
+
+### Advisory findings from the T5 review (non-blocking, follow-ups for later tasks)
+
+Recorded from the approved review; none opened a correction. Treat as separate later
+work, never as a reason to re-review this candidate.
+
+- `R1-e2e-auth-bypass` (WARNING, `src/Root.tsx:12-14`) — the E2E fake auth is imported
+  into `Root` and activated by the build-time `VITE_E2E` flag; a production build made
+  with the flag set would ship the bypass. Consider guarding/stripping this in T12.
+- `R2-001` (WARNING, `src/auth/testing/fakeAuth.ts:50-85`) — `createE2eAuth` duplicates
+  `createFakeAuth`; factor the shared port.
+- `R2-002` (WARNING, `src/App.tsx:150-155`) — sign-out failure only `console.error`s,
+  next to the component's existing toast convention.
+- `R2-003` / `R2-004` / `R2-005` (SUGGESTION) — the invalid-credentials literal is
+  declared in three places; the `testing/` factory sits on the shipping render path;
+  the `e2e:auth` key/sentinel is a bare literal in three of four sites.
+- `R3-playwright-env-reuse` (WARNING, `playwright.config.ts:12`) —
+  `reuseExistingServer` can reuse a server started without `VITE_E2E`, flaking the
+  default-authenticated assertion locally even though it is deterministic in CI.
+- `R3-unverifiable-auth-port` (SUGGESTION, `src/Root.tsx:6-8`) — the real adapter is
+  outside this candidate's paths; its production wiring is unproved here.
+- `R4-A` (WARNING, `src/auth/AuthProvider.tsx`) — a rejected `getSession()` silently
+  collapses to unauthenticated (no log/retry/backoff).
+- `R4-B` (WARNING, `src/Root.tsx:46`) — no bounded wait; a hung `getSession()` leaves
+  the loading screen indefinitely.
+- `R4-C` (SUGGESTION, `src/auth/LoginScreen.tsx`) — every sign-in failure maps to the
+  generic message with no logging, so outages look like bad credentials.
+
 Operational milestones (not authored work units):
 
 - M1 (pre-cutover): slice 1 merged to `master`; tracker slices green; dev-project
@@ -592,11 +647,10 @@ Operational milestones (not authored work units):
   seed, imports their own v3 file; per-user verification above passes.
 - M4 (go-live gate): upgrade to Pro or sign off the exception (owner: Piwen).
 
-**Next step**: T5 (auth provider, login screen, composition root, logout, e2e gate),
-consuming `createSupabaseClient` / `createSupabaseAuth` /
-`INVALID_CREDENTIALS_MESSAGE`. T4 is closed — reviewed (approved) and its advisory
-findings are listed above for T5 to weigh. Before cutover, re-run the T3 RLS probe
-against the linked dev project (Decision 14) and run the regression sweep
+**Next step**: T6 (repository ports + Supabase products adapter + mappers/errors),
+consuming the frozen `Repositories` contract. T5 is closed — reviewed (approved) and
+its 11 advisory findings are listed above for T6+ to weigh. Before cutover, re-run the
+T3 RLS probe against the linked dev project (Decision 14) and run the regression sweep
 (`pnpm lint`, `pnpm exec tsc -b`, `pnpm coverage`, `pnpm exec playwright test`).
 
 ## Delivery strategy + slice boundaries
