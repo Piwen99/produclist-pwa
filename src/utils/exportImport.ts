@@ -51,6 +51,17 @@ function backupFilename(now: Date = new Date()): string {
   return `produclist-backup-${y}-${m}-${d}.json`;
 }
 
+/** Format a date as `yyyy-mm-dd` for import error labels. */
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/** Human label for a list send that failed to import. */
+function listSendLabel(send: ListSend): string {
+  const cliente = send.cliente.trim();
+  return cliente ? `(lista enviada de ${cliente})` : '(lista enviada)';
+}
+
 /**
  * Result of an import operation.
  */
@@ -392,53 +403,60 @@ function createApplyImport(
       }
     }
 
-    if (preview.quotesToAdd.length > 0) {
+    for (const quote of preview.quotesToAdd) {
       try {
         // Drop incoming ids: cross-device ids must not collide.
-        for (const quote of preview.quotesToAdd) {
-          await repos.quotes.create({
-            fecha: quote.fecha,
-            cliente: quote.cliente,
-            items: quote.items,
-            totalNeto: quote.totalNeto,
-            iva: quote.iva,
-            total: quote.total,
-          });
-          result.quotesAdded++;
-        }
+        await repos.quotes.create({
+          fecha: quote.fecha,
+          cliente: quote.cliente,
+          items: quote.items,
+          totalNeto: quote.totalNeto,
+          iva: quote.iva,
+          total: quote.total,
+        });
+        result.quotesAdded++;
       } catch (err) {
         result.errors.push({
-          nombre: '(cotizaciones)',
+          nombre: `(cotización del ${isoDate(quote.fecha)})`,
           error: err instanceof Error ? err.message : 'Error desconocido.',
         });
       }
     }
 
     if (preview.listSendsToAdd.length > 0) {
+      // Re-check against the user's own sends so a stale preview cannot
+      // duplicate a send: apply is itself signature-idempotent. A failed read
+      // is reported once and skips the batch, because we cannot dedup safely.
+      let unseen: ListSend[] = [];
       try {
-        // Re-check against the user's own sends so a stale preview cannot
-        // duplicate a send: apply is itself signature-idempotent.
         const ownSends = await repos.listSends.listOwn(userId);
-        const unseen = unseenBySignature(
+        unseen = unseenBySignature(
           ownSends.map(listSendSignature),
           preview.listSendsToAdd,
           listSendSignature
         );
+      } catch (err) {
+        result.errors.push({
+          nombre: '(listas enviadas)',
+          error: err instanceof Error ? err.message : 'Error desconocido.',
+        });
+      }
 
-        // Drop incoming ids: cross-device ids must not collide.
-        for (const send of unseen) {
+      // Drop incoming ids: cross-device ids must not collide.
+      for (const send of unseen) {
+        try {
           await repos.listSends.create({
             fecha: send.fecha,
             cliente: send.cliente,
             items: send.items,
           });
           result.listSendsAdded++;
+        } catch (err) {
+          result.errors.push({
+            nombre: listSendLabel(send),
+            error: err instanceof Error ? err.message : 'Error desconocido.',
+          });
         }
-      } catch (err) {
-        result.errors.push({
-          nombre: '(listas enviadas)',
-          error: err instanceof Error ? err.message : 'Error desconocido.',
-        });
       }
     }
 

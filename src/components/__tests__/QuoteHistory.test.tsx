@@ -4,7 +4,14 @@ import { MemoryRouter } from 'react-router-dom';
 import { QuoteHistory } from '../QuoteHistory';
 import { ToastProvider } from '../../hooks/ToastProvider';
 import { DataProvider } from '../../data/DataProvider';
-import { createInMemoryRepositories } from '../../data/testing/inMemoryRepos';
+import {
+  createInMemoryClientsRepo,
+  createInMemoryListSendsRepo,
+  createInMemoryProductsRepo,
+  createInMemoryQuotesRepo,
+  createInMemoryRepositories,
+  type Principal,
+} from '../../data/testing/inMemoryRepos';
 import type { Repositories } from '../../data/ports';
 import type { SavedQuote } from '../../types/quote';
 
@@ -139,6 +146,37 @@ describe('QuoteHistory', () => {
 
       expect(screen.getByText(/15 de enero de 2024/i)).toBeInTheDocument();
       expect(await repos.quotes.listOwn(USER_ID)).toHaveLength(2);
+    });
+  });
+
+  describe('admin view', () => {
+    it('hides delete for foreign quotes while keeping it for own quotes', async () => {
+      const principal: Principal = { userId: USER_ID, isAdmin: true };
+      const quotes = createInMemoryQuotesRepo(principal, [
+        { ...mockQuotes[0], id: 1, ownerId: USER_ID },
+        { ...mockQuotes[1], id: 2, ownerId: 'other-user' },
+      ]);
+      const listSends = createInMemoryListSendsRepo(principal);
+      const adminRepos: Repositories = {
+        products: createInMemoryProductsRepo(principal),
+        quotes,
+        listSends,
+        clients: createInMemoryClientsRepo(quotes, listSends),
+      };
+
+      renderWithProviders(adminRepos);
+
+      expect(await screen.findByText(/15 de enero de 2024/i)).toBeInTheDocument();
+      expect(screen.getByText(/10 de enero de 2024/i)).toBeInTheDocument();
+
+      const deleteButtons = screen.getAllByRole('button', { name: /eliminar/i });
+      expect(deleteButtons).toHaveLength(1);
+      expect(
+        screen.getByText(/15 de enero de 2024/i).closest('div')
+      ).toContainElement(deleteButtons[0]);
+      expect(
+        screen.getByText(/10 de enero de 2024/i).closest('div')
+      ).not.toContainElement(deleteButtons[0]);
     });
   });
 });
