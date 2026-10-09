@@ -4,6 +4,7 @@ import { LoginScreen } from './auth/LoginScreen';
 import { useAuth } from './auth/useAuth';
 import { createE2eAuth } from './auth/testing/fakeAuth';
 import { createSupabaseAuth } from './auth/supabaseAuth';
+import { e2eBypassEnabled } from './auth/e2eBypass';
 import { createSupabaseClient, readSupabaseConfig } from './data/supabase/client';
 import { createE2eRepositories } from './data/testing/stub';
 import { createSupabaseRepositories } from './data/supabase/repositories';
@@ -12,12 +13,8 @@ import type { Repositories } from './data/ports';
 import type { AuthPort } from './auth/ports';
 import App from './App';
 
-function isE2eEnabled(): boolean {
-  return import.meta.env.VITE_E2E === '1' && !import.meta.env.PROD;
-}
-
 function resolveAuthPort(): AuthPort | null {
-  if (isE2eEnabled()) {
+  if (e2eBypassEnabled(import.meta.env)) {
     return createE2eAuth();
   }
   if (!readSupabaseConfig()) {
@@ -27,7 +24,7 @@ function resolveAuthPort(): AuthPort | null {
 }
 
 function resolveRepositories(userId: string): Repositories {
-  if (isE2eEnabled()) {
+  if (e2eBypassEnabled(import.meta.env)) {
     return createE2eRepositories({ userId, isAdmin: false });
   }
   return createSupabaseRepositories(createSupabaseClient());

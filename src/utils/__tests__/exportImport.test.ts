@@ -6,6 +6,7 @@ import {
   BACKUP_VERSION,
   type BackupFile,
   type BackupService,
+  type ImportPreview,
 } from '../exportImport';
 import {
   createInMemoryClientsRepo,
@@ -124,6 +125,15 @@ const backupV3 = (products: unknown[], quotes: unknown[], listSends: unknown[]) 
     quotes,
     listSends,
   });
+
+const emptyPreview = (overrides: Partial<ImportPreview>): ImportPreview => ({
+  toAdd: [],
+  toUpdate: [],
+  quotesToAdd: [],
+  listSendsToAdd: [],
+  errors: [],
+  ...overrides,
+});
 
 describe('listSendSignature', () => {
   it('normalizes fecha to ISO and cliente to trimmed + lowercased', () => {
@@ -299,6 +309,47 @@ describe('createBackupService (owner-scoped preview/apply)', () => {
       expect(result.errors[0].error).toBe('quote write failed');
       expect(await repos.quotes.listOwn(PRINCIPAL.userId)).toHaveLength(2);
     });
+
+    it('labels a failed quote with the local calendar day, not the UTC day', async () => {
+      const originalTz = process.env.TZ;
+      process.env.TZ = 'Etc/GMT+4'; // UTC-4, no DST: 02:00Z is the previous local day.
+      try {
+        const quote = { ...sampleQuote, fecha: new Date('2026-09-23T02:00:00.000Z') };
+        expect(quote.fecha.toISOString().slice(0, 10)).toBe('2026-09-23');
+
+        repos.quotes.create = () => Promise.reject(new Error('quote write failed'));
+        const result = await service.applyImport(emptyPreview({ quotesToAdd: [quote] }));
+
+        expect(result.quotesAdded).toBe(0);
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0].nombre).toBe('(cotización del 2026-09-22)');
+      } finally {
+        if (originalTz === undefined) delete process.env.TZ;
+        else process.env.TZ = originalTz;
+      }
+    });
+
+    it('reports a mid-batch quote with an invalid date as a generic label and keeps later quotes', async () => {
+      const quotes = [
+        { ...sampleQuote, fecha: new Date('2026-09-21T10:00:00.000Z'), cliente: 'Uno' },
+        { ...sampleQuote, fecha: new Date('not-a-date'), cliente: 'Rota' },
+        { ...sampleQuote, fecha: new Date('2026-09-23T10:00:00.000Z'), cliente: 'Tres' },
+      ];
+      const realCreate = repos.quotes.create.bind(repos.quotes);
+      let calls = 0;
+      repos.quotes.create = (data) => {
+        calls += 1;
+        if (calls === 2) return Promise.reject(new Error('quote write failed'));
+        return realCreate(data);
+      };
+
+      const result = await service.applyImport(emptyPreview({ quotesToAdd: quotes }));
+
+      expect(result.quotesAdded).toBe(2);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].nombre).toBe('(cotización)');
+      expect(await repos.quotes.listOwn(PRINCIPAL.userId)).toHaveLength(2);
+    });
   });
 
   describe('list sends', () => {
@@ -399,6 +450,32 @@ describe('createBackupService (owner-scoped preview/apply)', () => {
       expect(result.listSendsAdded).toBe(0);
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0].nombre).toBe('(lista enviada)');
+    });
+
+    it('reports a mid-batch send with a non-string client as a generic label and keeps later sends', async () => {
+      const sends = [
+        { ...sampleSend, fecha: new Date('2026-09-21T10:00:00.000Z'), cliente: 'Uno' },
+        {
+          ...sampleSend,
+          fecha: new Date('2026-09-22T10:00:00.000Z'),
+          cliente: 123 as unknown as string,
+        },
+        { ...sampleSend, fecha: new Date('2026-09-23T10:00:00.000Z'), cliente: 'Tres' },
+      ];
+      const realCreate = repos.listSends.create.bind(repos.listSends);
+      let calls = 0;
+      repos.listSends.create = (data) => {
+        calls += 1;
+        if (calls === 2) return Promise.reject(new Error('send write failed'));
+        return realCreate(data);
+      };
+
+      const result = await service.applyImport(emptyPreview({ listSendsToAdd: sends }));
+
+      expect(result.listSendsAdded).toBe(2);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].nombre).toBe('(lista enviada)');
+      expect(await repos.listSends.listOwn(PRINCIPAL.userId)).toHaveLength(2);
     });
   });
 

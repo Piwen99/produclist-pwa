@@ -846,21 +846,30 @@ that used to live in the seed module was removed with it; name de-duplication is
 enforced by `(owner_id, nombre)` uniqueness + `seedIfEmpty`'s `ignoreDuplicates`
 upsert, which is outside this candidate's scope.
 
-### Advisory findings from the T12 review (non-blocking)
+### Advisory findings from the T12 review (non-blocking; all four CLOSED by `fix/followups-hardening`)
 
 - `R2-e2e-helper-name` (SUGGESTION, `src/Root.tsx:16`) — `isE2eEnabled` also encodes
   the production guard (`&& !PROD`), not just the flag probe; a future call site could
   mistake it for a plain env probe. A name/comment stating "e2e bypass active outside
-  production" would keep the guard visible.
+  production" would keep the guard visible. **CLOSED**: extracted to the exported
+  pure predicate `e2eBypassEnabled(env)` in `src/auth/e2eBypass.ts` with an explicit
+  "e2e bypass is active only outside production" comment; `Root` routes through it.
 - `R2-test-prod-frame` (SUGGESTION, `src/auth/__tests__/Root.test.tsx:33-35`) — the
   production-guard test stubs `PROD` as the string `'true'`, not a real production
-  build; brittle if the guard later uses a strict boolean comparison.
+  build; brittle if the guard later uses a strict boolean comparison. **CLOSED**: the
+  predicate is unit-tested directly with a real boolean
+  (`e2eBypassEnabled({ VITE_E2E: '1', PROD: true }) === false`); the guard is a truthy
+  check so the string stub stays valid.
 - `R3-A` (SUGGESTION, `src/auth/__tests__/Root.test.tsx:35`) — Vite statically
   replaces `PROD`/`VITE_*` at build time, so the test never exercises an actual
-  production bundle.
+  production bundle. **CLOSED as documented limitation**: tests exercise the pure
+  predicate (true only for `VITE_E2E === '1'` outside production), not a real bundle.
 - `R3-B` (SUGGESTION, `src/Root.tsx:30`) — the new test only drives the auth-port
   path (empty Supabase config), so nothing proves the `resolveRepositories` branch
-  falls back to Supabase repos under `VITE_E2E=1` + production.
+  falls back to Supabase repos under `VITE_E2E=1` + production. **CLOSED**: the
+  production integration test now asserts the whole path never renders the e2e stub
+  app (config-error screen under `VITE_E2E=1` + truthy `PROD`), and the predicate
+  covers the repositories condition; no fake production bundle is fabricated.
 
 ### Pre-cutover hardening (`fix/cutover-hardening`)
 
@@ -883,43 +892,74 @@ passed. Native RDD review (lineage `review-aa29326528dc1d94`, tier medium, 1 len
 `review-reliability`) **approved**, no correction, authority burned. Commits: `4c79548`
 + `2ab2914` + `c815903`. Advisories below.
 
-### Advisory findings from the pre-cutover hardening review (non-blocking)
+### Advisory findings from the pre-cutover hardening review (non-blocking; R3-001/R3-002 CLOSED by `fix/followups-hardening`)
 
 - `R3-001` (WARNING, `src/utils/exportImport.ts:420`) — the failure labels are built
   inside the catch (`isoDate` → `toISOString`, `listSendLabel` → `trim`); an invalid
   `Date` or non-string `cliente` would throw while building the label and escape the
   catch, abandoning the rest. **Not reachable via the real flow**: `parseQuoteItem`
   rejects invalid dates and `parseListSendItem` coerces `cliente` to a string.
-  Defensive hardening left as a follow-up.
+  **CLOSED**: labels are throw-safe (`quoteLabel` degrades an unusable date to
+  `(cotización)`; `listSendLabel` degrades a non-string client to `(lista enviada)`);
+  `listSendSignature` normalizes a malformed client name so a bad record reaches the
+  per-item catch instead of aborting the batch. Tests cover a mid-batch invalid-date
+  quote and a mid-batch non-string-client send, proving later records still persist.
 - `R3-002` (SUGGESTION, `src/utils/exportImport.ts:56`) — `isoDate` uses UTC
   (`toISOString`), so the label day can differ by one from the locally formatted date.
+  **CLOSED**: `isoDate` now formats the LOCAL calendar day
+  (`getFullYear`/`getMonth`+1/`getDate`), matching `backupFilename`; a TZ-fixed test
+  proves the local day wins at a day boundary.
 
 Operational milestones (not authored work units):
 
-- M1 (pre-cutover): slice 1 merged to `master`; tracker slices green; dev-project
-  migrations + 5 dev accounts + admin `rol` + RLS probe + integration checklist done.
-- M2 (cutover): every user exports v3 on their own device and freezes entry; prod
-  resources created; tracker merged to `master` and deployed.
-- M3 (post-cutover): each user signs in on their own device, gets the 44-product
-  seed, imports their own v3 file; per-user verification above passes.
-- M4 (go-live gate): upgrade to Pro or sign off the exception (owner: Piwen).
+- M1 (pre-cutover): done — tracker slices merged to `master`; dev-project migrations +
+  accounts + admin `rol` + RLS probe + integration checklist done.
+- M2 (cutover): **DONE** — tracker merged to `master` (PR #39, `master` = `21e0140`) and
+  Vercel auto-deployed `master`; production URL `https://produclist-pwa.vercel.app`.
+- M3 (post-cutover): **DONE** — each user signs in on their own device, gets the
+  44-product seed and imports their own v3 file (see evidence below).
+- M4 (go-live gate): **dropped** — Supabase Pro not required per Piwen.
 
-**Next step**: T1–T12 are implemented and tracked, and the **pre-cutover hardening**
-(`fix/cutover-hardening` → PR pending, base = tracker) resolves the migration-affecting
-advisories. The change is at the **cutover gate** (PR11 = tracker → `master`). Fase 0 of
-the cutover is done: #50 and #49 merged to the tracker; regression sweep green; the dev
-project (`ptsvftbnfmflgcgmmymr`) was migrated (`supabase db push`) and passed the
-structural + anon RLS probe (RLS on 4 tables, 13 policies, `is_admin` SECDEF, trigger,
-anon 0 grants → `42501`); `#39` CI green. Remaining, in order: merge
-`fix/cutover-hardening` and any follow-ups to the tracker; **M1** (provision the 5
-accounts in the dev dashboard + admin `rol`, then run the **functional** RLS probe —
-vendor own-only, foreign update 0, admin sees all, `owner_id`, `23505`); **M2** (Vercel
-`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` for Production, prod Supabase project, user
-v3 export + freeze, then merge #39 → `master` → Vercel deploy); **M3** per-device
-sign-in + v3 import; **M4 dropped** (Supabase Pro not required per Piwen). Open follow-ups:
-T12 review suggestions; hardening `R3-001` (defensive labels) / `R3-002` (UTC label);
-T11 `R3-2`/`R3-3` (seed coverage). Before cutover, re-run the regression sweep
-(`pnpm lint`, `pnpm exec tsc -b`, `pnpm coverage`, `pnpm exec playwright test`).
+### Cutover record (DONE, verified 2026-10-09)
+
+- Production app: `master` = `21e0140` (PR #39 merged); Vercel auto-deploys `master`;
+  URL `https://produclist-pwa.vercel.app`.
+- Prod Supabase project `gwajtwzdomccuptizboi`: 4 public tables with RLS enabled on all
+  4; 7 confirmed accounts; admins `jgarcia`/`rdelrio`/`rmallol`/`rtapia`, vendors
+  `apardo`/`juzcategui`/`smartinez`.
+- Security posture: email signup DISABLED (probe `POST /auth/v1/signup` → HTTP 422
+  `signup_disabled`); anon read denied (`42501 permission denied for table productos`);
+  the deployed bundle inlines the prod `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`
+  only (no secret leaked).
+- M3 evidence: `jgarcia` signed in and the per-user seed produced 44 `productos` rows
+  owned by `jgarcia`; other users each migrate on their own device.
+
+### Hardening follow-up (`fix/followups-hardening`)
+
+Closes the remaining non-blocking advisories on the cutover tracker.
+
+- `src/utils/exportImport.ts` + tests: throw-safe, local-day failure labels. Closes
+  `R3-001`/`R3-002`.
+- `src/auth/e2eBypass.ts` + `src/Root.tsx` + `src/auth/__tests__/Root.test.tsx`: named,
+  exported `e2eBypassEnabled` predicate stating the production guard. Closes T12
+  `R2-e2e-helper-name`, `R2-test-prod-frame`, `R3-A`, `R3-B`.
+- `supabase/migrations/20261009000000_perfiles_least_privilege.sql`: revokes
+  INSERT/UPDATE/DELETE on `public.perfiles` from `authenticated` (and defensively from
+  `anon`) and re-grants only SELECT, restoring the intended least privilege. **Not
+  applied to any database by this change.**
+- Advisories closed by this change: `R3-001`, `R3-002`, `R2-e2e-helper-name`,
+  `R2-test-prod-frame`, `R3-A`, `R3-B`.
+- Out of scope / still open (not touched): T11 `R3-2` (ordering assertion) and `R3-3`
+  (unmount guard) seed coverage; T5 `R2-001` (`createE2eAuth` duplication), `R4-A`
+  (silent `getSession` rejection), `R4-B` (no bounded auth wait); T6/T9 create-null-row
+  and update-error-mapping suggestions.
+- Verification (all green): `pnpm coverage` 469 passed (47 files), thresholds
+  78.71/71.94/82.48/80.65 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b`
+  exit 0; `pnpm exec playwright test` 18 passed.
+
+**Next step**: none required for cutover — it is **DONE** (M2/M3 done, M4 dropped).
+Only the out-of-scope advisories listed above remain; pick them up only on reported
+pain.
 
 ## Delivery strategy + slice boundaries
 
