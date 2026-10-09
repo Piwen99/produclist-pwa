@@ -13,21 +13,34 @@ import type { Repositories } from './data/ports';
 import type { AuthPort } from './auth/ports';
 import App from './App';
 
-function resolveAuthPort(): AuthPort | null {
+/**
+ * The auth port plus a factory for the repository set. Both are resolved once
+ * per page load so the underlying Supabase client is a single shared instance.
+ */
+interface Wiring {
+  auth: AuthPort;
+  createRepositories: (userId: string) => Repositories;
+}
+
+function resolveWiring(): Wiring | null {
   if (e2eBypassEnabled(import.meta.env)) {
-    return createE2eAuth();
+    return {
+      auth: createE2eAuth(),
+      createRepositories: (userId) => createE2eRepositories({ userId, isAdmin: false }),
+    };
   }
   if (!readSupabaseConfig()) {
     return null;
   }
-  return createSupabaseAuth(createSupabaseClient());
-}
-
-function resolveRepositories(userId: string): Repositories {
-  if (e2eBypassEnabled(import.meta.env)) {
-    return createE2eRepositories({ userId, isAdmin: false });
-  }
-  return createSupabaseRepositories(createSupabaseClient());
+  // One client for the whole session. Building a second client for the data
+  // layer spawns another GoTrueClient on the same storage key, which fires auth
+  // events back into the gate and re-creates repositories in a tight loop
+  // (the "Multiple GoTrueClient instances" storm that stalls the first load).
+  const client = createSupabaseClient();
+  return {
+    auth: createSupabaseAuth(client),
+    createRepositories: () => createSupabaseRepositories(client),
+  };
 }
 
 function LoadingScreen() {
@@ -53,33 +66,40 @@ export function ConfigErrorScreen() {
   );
 }
 
-function AuthGate() {
+interface AuthGateProps {
+  createRepositories: Wiring['createRepositories'];
+}
+
+function AuthGate({ createRepositories }: AuthGateProps) {
   const { status, session } = useAuth();
+  const userId = session?.userId ?? null;
+  // Key the memo on the stable user id, not the session object: a token refresh
+  // hands us a fresh object with the same id and must not rebuild repositories.
   const repositories = useMemo(
-    () => (status === 'authenticated' && session ? resolveRepositories(session.userId) : null),
-    [status, session],
+    () => (status === 'authenticated' && userId ? createRepositories(userId) : null),
+    [status, userId, createRepositories],
   );
 
   if (status === 'loading') return <LoadingScreen />;
-  if (status === 'unauthenticated' || !session || !repositories) return <LoginScreen />;
+  if (status === 'unauthenticated' || !userId || !repositories) return <LoginScreen />;
 
   return (
-    <DataProvider repos={repositories} userId={session.userId}>
+    <DataProvider repos={repositories} userId={userId}>
       <App />
     </DataProvider>
   );
 }
 
 export default function Root() {
-  const [auth] = useState<AuthPort | null>(() => resolveAuthPort());
+  const [wiring] = useState(resolveWiring);
 
-  if (!auth) {
+  if (!wiring) {
     return <ConfigErrorScreen />;
   }
 
   return (
-    <AuthProvider auth={auth}>
-      <AuthGate />
+    <AuthProvider auth={wiring.auth}>
+      <AuthGate createRepositories={wiring.createRepositories} />
     </AuthProvider>
   );
 }
