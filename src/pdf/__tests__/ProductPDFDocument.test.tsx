@@ -17,14 +17,6 @@ vi.mock('@react-pdf/renderer', () => ({
   }) => children({ loading: false, error: null }),
 }));
 
-// The document must render from its `products` prop only. If it still reaches
-// for a live query this mock makes the render throw, which is the RED signal.
-vi.mock('dexie-react-hooks', () => ({
-  useLiveQuery: () => {
-    throw new Error('ProductPDFDocument must not use useLiveQuery');
-  },
-}));
-
 const products: Product[] = [
   {
     id: 1,

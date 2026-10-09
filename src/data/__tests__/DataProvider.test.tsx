@@ -4,6 +4,7 @@ import { act, render, renderHook, screen, waitFor } from '@testing-library/react
 import { DataProvider } from '../DataProvider';
 import { useData } from '../useData';
 import { createInMemoryRepositories } from '../testing/inMemoryRepos';
+import { seedProducts } from '../seedProducts';
 import type { ProductsRepo, Repositories } from '../ports';
 import type { Product, ProductInput } from '../../types/product';
 
@@ -279,6 +280,31 @@ describe('DataProvider', () => {
     expect(removeSpy).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
     expect(winAdd).toHaveBeenCalledWith('online', expect.any(Function));
     expect(winRemove).toHaveBeenCalledWith('online', expect.any(Function));
+  });
+
+  it('seeds the product catalog for the user before the first refresh', async () => {
+    const seedIfEmpty = vi.fn<ProductsRepo['seedIfEmpty']>().mockResolvedValue(undefined);
+    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
+    renderProbe(withProducts(createRepo({ seedIfEmpty, list })));
+
+    await waitFor(() => expect(seedIfEmpty).toHaveBeenCalledTimes(1));
+    expect(seedIfEmpty).toHaveBeenCalledWith('user-1', seedProducts);
+    expect(list).toHaveBeenCalled();
+  });
+
+  it('still refreshes when seeding fails, logging the failure', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const seedIfEmpty = vi
+      .fn<ProductsRepo['seedIfEmpty']>()
+      .mockRejectedValue(new Error('seed down'));
+    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
+    renderProbe(withProducts(createRepo({ seedIfEmpty, list })));
+
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[DataProvider] Failed to seed products',
+      expect.any(Error),
+    );
   });
 
   it('refreshes on mount under StrictMode without leaking subscriptions', async () => {

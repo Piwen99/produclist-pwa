@@ -23,17 +23,20 @@ function setup(products: Product[] | undefined = allProducts) {
     { userId: 'user-1', isAdmin: false },
     products ?? [],
   );
-  const repos =
-    products === undefined
+  // The provider seeds the base catalog on mount; these tests drive the
+  // catalog explicitly, so seeding is neutralized to keep the fixture exact.
+  const productsRepo: ProductsRepo = {
+    ...base.products,
+    seedIfEmpty: vi.fn<ProductsRepo['seedIfEmpty']>().mockResolvedValue(undefined),
+    ...(products === undefined
       ? {
-          products: {
-            ...base.products,
-            list: vi
-              .fn<ProductsRepo['list']>()
-              .mockReturnValue(new Promise<Product[]>(() => {})),
-          },
+          list: vi
+            .fn<ProductsRepo['list']>()
+            .mockReturnValue(new Promise<Product[]>(() => {})),
         }
-      : base;
+      : {}),
+  };
+  const repos = { ...base, products: productsRepo };
 
   return render(
     <DataProvider repos={repos} userId="user-1">

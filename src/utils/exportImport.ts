@@ -3,7 +3,6 @@ import type { Product, ProductInput, Category } from '../types/product';
 import type { QuoteItem, SavedQuote } from '../types/quote';
 import type { ListSend } from '../types/listSend';
 import { isValidChileanFormat } from './price';
-import { markBackedUp } from './backupReminder';
 
 const CATEGORY_VALUES: Category[] = [
   'Frutos Secos',
@@ -470,8 +469,6 @@ export function createBackupService(repos: Repositories, userId: string): Backup
         type: 'application/json',
       });
       downloadBlob(blob, backupFilename());
-      // Any export counts as a backup — the reminder resets from here.
-      markBackedUp();
     },
 
     previewImport: createPreviewImport(repos, userId),

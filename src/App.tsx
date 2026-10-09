@@ -15,7 +15,6 @@ import { Cotizador } from './components/Cotizador';
 import { QuoteHistory } from './components/QuoteHistory';
 import { ClientPrices } from './components/ClientPrices';
 import { ConfirmDialog } from './components/ConfirmDialog';
-import { BackupReminder } from './components/BackupReminder';
 import { ListSendForm } from './components/ListSendForm';
 import { createBackupService, type ImportPreview } from './utils/exportImport';
 import { buildListSendItems } from './utils/listSend';
@@ -372,7 +371,6 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
-        {hasProducts && <BackupReminder onExport={handleExportJSON} />}
         <Routes>
           <Route index element={
             <ProductList
