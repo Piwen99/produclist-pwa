@@ -1,14 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { QuoteProductSelector } from '../QuoteProductSelector';
+import { DataProvider } from '../../data/DataProvider';
+import { createInMemoryRepositories } from '../../data/testing/inMemoryRepos';
+import type { ProductsRepo } from '../../data/ports';
 import type { Product } from '../../types/product';
-
-// Mock the Dexie hook
-vi.mock('dexie-react-hooks', () => ({
-  useLiveQuery: vi.fn(),
-}));
-
-import { useLiveQuery } from 'dexie-react-hooks';
 
 const allProducts: Product[] = [
   { id: 1, nombre: 'Almendras', categoria: 'Frutos Secos', formato: '11,34', precioNeto: 15000, disponible: true },
@@ -17,14 +13,36 @@ const allProducts: Product[] = [
   { id: 4, nombre: 'Pasas', categoria: 'Fruta Deshidratada', formato: '0,5', precioNeto: 2500, disponible: true },
 ];
 
-// Mock returns ALL products (available + unavailable), as the real Dexie
-// query would — the component itself must filter by `disponible`.
 const mockOnSelect = vi.fn();
 const mockOnClose = vi.fn();
 
-function setup(mockData: Product[] | undefined = allProducts) {
-  (useLiveQuery as ReturnType<typeof vi.fn>).mockReturnValue(mockData);
-  return render(<QuoteProductSelector onSelect={mockOnSelect} onClose={mockOnClose} />);
+// The selector must read products from `useData()`. `undefined` simulates the
+// pre-first-load state (the provider has no snapshot yet).
+function setup(products: Product[] | undefined = allProducts) {
+  const base = createInMemoryRepositories(
+    { userId: 'user-1', isAdmin: false },
+    products ?? [],
+  );
+  // The provider seeds the base catalog on mount; these tests drive the
+  // catalog explicitly, so seeding is neutralized to keep the fixture exact.
+  const productsRepo: ProductsRepo = {
+    ...base.products,
+    seedIfEmpty: vi.fn<ProductsRepo['seedIfEmpty']>().mockResolvedValue(undefined),
+    ...(products === undefined
+      ? {
+          list: vi
+            .fn<ProductsRepo['list']>()
+            .mockReturnValue(new Promise<Product[]>(() => {})),
+        }
+      : {}),
+  };
+  const repos = { ...base, products: productsRepo };
+
+  return render(
+    <DataProvider repos={repos} userId="user-1">
+      <QuoteProductSelector onSelect={mockOnSelect} onClose={mockOnClose} />
+    </DataProvider>,
+  );
 }
 
 beforeEach(() => {
@@ -32,42 +50,43 @@ beforeEach(() => {
 });
 
 describe('QuoteProductSelector', () => {
-  it('should render the modal when open', () => {
+  it('should render the modal when open', async () => {
     setup();
-    expect(screen.getByText('Seleccionar Producto')).toBeInTheDocument();
+    expect(await screen.findByText('Seleccionar Producto')).toBeInTheDocument();
   });
 
-  it('should display available products', () => {
+  it('should display available products', async () => {
     setup();
-    expect(screen.getByText('Almendras')).toBeInTheDocument();
+    expect(await screen.findByText('Almendras')).toBeInTheDocument();
     expect(screen.getByText('Chía')).toBeInTheDocument();
     expect(screen.getByText('Pasas')).toBeInTheDocument();
   });
 
-  it('should display unavailable products too (all products are quotable)', () => {
+  it('should display unavailable products too (all products are quotable)', async () => {
     setup();
     // Maní is marked unavailable, but the user deliberately wants to be able
     // to quote every product regardless of `disponible`.
-    expect(screen.getByText('Maní')).toBeInTheDocument();
+    expect(await screen.findByText('Maní')).toBeInTheDocument();
   });
 
-  it('should display product formato next to name', () => {
+  it('should display product formato next to name', async () => {
     setup();
-    // Should see formato near the product name
-    const almondsButton = screen.getByRole('button', { name: /almendras/i });
+    const almondsButton = await screen.findByRole('button', { name: /almendras/i });
     expect(almondsButton).toHaveTextContent('11,34 kg');
   });
 
-  it('should call onSelect when a product is clicked', () => {
+  it('should call onSelect when a product is clicked', async () => {
     setup();
-    fireEvent.click(screen.getByText('Almendras'));
+    fireEvent.click(await screen.findByText('Almendras'));
     expect(mockOnSelect).toHaveBeenCalledTimes(1);
-    expect(mockOnSelect).toHaveBeenCalledWith(allProducts[0]);
+    expect(mockOnSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ nombre: 'Almendras', id: 1 }),
+    );
   });
 
-  it('should filter products by search term', () => {
+  it('should filter products by search term', async () => {
     setup();
-    const searchInput = screen.getByPlaceholderText('Buscar productos…');
+    const searchInput = await screen.findByPlaceholderText('Buscar productos…');
     // Search for "al" - should match "Almendras"
     fireEvent.change(searchInput, { target: { value: 'al' } });
     expect(screen.getByText('Almendras')).toBeInTheDocument();
@@ -75,33 +94,38 @@ describe('QuoteProductSelector', () => {
     expect(screen.queryByText('Pasas')).not.toBeInTheDocument();
   });
 
-  it('should show no results message when search has no matches', () => {
+  it('should show no results message when search has no matches', async () => {
     setup();
-    const searchInput = screen.getByPlaceholderText('Buscar productos…');
+    const searchInput = await screen.findByPlaceholderText('Buscar productos…');
     fireEvent.change(searchInput, { target: { value: 'xyz' } });
     expect(screen.getByText(/No hay productos que coincidan/)).toBeInTheDocument();
   });
 
-  it('should show empty state when no available products', () => {
+  it('should show empty state when no available products', async () => {
     setup([]);
-    expect(screen.getByText('No hay productos disponibles')).toBeInTheDocument();
+    expect(await screen.findByText('No hay productos disponibles')).toBeInTheDocument();
   });
 
-  it('should call onSelect with correct product data including formato', () => {
+  it('should show the loading placeholder before the first load resolves', () => {
+    setup(undefined);
+    expect(screen.getByText('Cargando productos...')).toBeInTheDocument();
+  });
+
+  it('should call onSelect with correct product data including formato', async () => {
     setup();
-    fireEvent.click(screen.getByText('Chía'));
+    fireEvent.click(await screen.findByText('Chía'));
     expect(mockOnSelect).toHaveBeenCalledWith(
       expect.objectContaining({
         nombre: 'Chía',
         formato: '1,5',
         disponible: true,
-      })
+      }),
     );
   });
 
-  it('should clear search and show all when X is clicked', () => {
+  it('should clear search and show all when X is clicked', async () => {
     setup();
-    const searchInput = screen.getByPlaceholderText('Buscar productos…');
+    const searchInput = await screen.findByPlaceholderText('Buscar productos…');
     fireEvent.change(searchInput, { target: { value: 'al' } });
     expect(screen.getByText('Almendras')).toBeInTheDocument();
 
@@ -111,16 +135,18 @@ describe('QuoteProductSelector', () => {
     expect(screen.getByText('Chía')).toBeInTheDocument();
   });
 
-  it('should expose dialog semantics with the title as accessible name', () => {
+  it('should expose dialog semantics with the title as accessible name', async () => {
     setup();
+    await screen.findByText('Almendras');
 
     const dialog = screen.getByRole('dialog', { name: 'Seleccionar Producto' });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(dialog).toHaveAttribute('aria-labelledby', 'quote-selector-title');
   });
 
-  it('should render a single "Seleccionar Producto" heading inside the dialog', () => {
+  it('should render a single "Seleccionar Producto" heading inside the dialog', async () => {
     setup();
+    await screen.findByText('Almendras');
 
     const headings = screen.getAllByRole('heading', { name: 'Seleccionar Producto' });
     expect(headings).toHaveLength(1);
@@ -129,8 +155,9 @@ describe('QuoteProductSelector', () => {
     expect(dialog).toContainElement(headings[0]);
   });
 
-  it('should render the close button inside the dialog and call onClose when clicked', () => {
+  it('should render the close button inside the dialog and call onClose when clicked', async () => {
     setup();
+    await screen.findByText('Almendras');
 
     const dialog = screen.getByRole('dialog', { name: 'Seleccionar Producto' });
     const closeButton = screen.getByRole('button', { name: 'Cerrar' });

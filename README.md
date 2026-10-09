@@ -1,172 +1,212 @@
 # Produclist — Lista de Precios PWA
 
-Aplicación web progresiva (PWA) para gestionar una lista editable de precios de productos alimenticios, armar cotizaciones y registrar los precios indicados a cada cliente. Mobile-first, sin backend y con funcionamiento 100% offline: todos los datos viven en IndexedDB dentro del navegador.
+PWA para gestionar una lista editable de precios de productos alimenticios, armar cotizaciones y registrar el último precio enviado a cada cliente. Ahora es **server-first sobre Supabase** (Postgres + Auth + RLS): cada fila pertenece a su dueño y el admin tiene una vista global aditiva de solo lectura. El modo offline ya **no** está soportado (trade-off aceptado).
 
-## Características
+## Puesta en marcha
+
+Requisitos: Node 22, pnpm 11.2.2 y la Supabase CLI para tareas de base de datos.
+
+1. `pnpm install`
+2. Crear `.env.local` (ignorado por git vía `*.local`) con las variables de entorno de la sección siguiente.
+3. `pnpm dev`
+
+Sin configuración, la app muestra la pantalla en español "Aplicación no configurada".
+
+## Variables de entorno
+
+| Variable | Descripción |
+|----------|-------------|
+| `VITE_SUPABASE_URL` | URL del proyecto Supabase. |
+| `VITE_SUPABASE_ANON_KEY` | Clave pública anon/publishable (pensada para ser pública). La `service-role` nunca se usa ni se commitea. |
+| `VITE_E2E` | Solo tests: `1` selecciona el auth stub y los repos falsos. **Ignorada en builds de producción.** |
+
+Valores de `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`: Supabase → Project Settings → API.
+
+## Modelo de datos y seguridad
+
+Tablas: `productos`, `cotizaciones`, `listas_enviadas`, `perfiles`.
+
+- Toda fila de datos lleva `owner_id uuid not null default auth.uid()`.
+- Unicidad por usuario: `productos(owner_id, nombre)` (dos vendedores pueden tener el mismo nombre de producto).
+- Las filas usan IDs numéricos `bigint identity`.
+- `perfiles.rol` es `'admin' | 'vendedor'`.
+
+La seguridad se aplica en un único punto: **RLS**.
+
+- Lectura: `owner_id = auth.uid() OR is_admin(auth.uid())`.
+- Escritura: requiere `owner_id = auth.uid()`.
+- `is_admin()` es un helper no recursivo `SECURITY DEFINER` (evita el error 42P17 de recursión en la policy de `perfiles`).
+
+El admin ve las filas de todos los dueños en modo lectura, pero solo puede editar las propias.
+
+## Base de datos y migraciones
+
+| Entorno | Comandos |
+|---------|----------|
+| Local | `supabase start` y luego `supabase db reset` (aplica `supabase/migrations/20261005000000_init.sql`). |
+| Remoto / linkeado | `supabase link --project-ref <project-ref>` y luego `supabase db push`. |
+
+No hay seed SQL (`[db.seed] enabled=false`): los 44 productos base se siembran por usuario en runtime desde la app.
+
+## Autenticación y alta de cuentas
+
+- Login por email/password.
+- Autoregistro deshabilitado (`enable_signup=false` en `[auth]` y `[auth.email]`).
+- Las cuentas se crean desde el dashboard de Supabase: Authentication → Users → Add user (email + password). El trigger `on_auth_user_created` crea la fila de `public.perfiles` correspondiente con `rol = 'vendedor'`.
+- Promover al admin (idempotente):
+
+  ```sql
+  update public.perfiles set rol = 'admin' where email = '<admin-email>';
+  ```
+
+## Respaldo e importación
+
+- La exportación JSON v3 incluye `products` + `quotes` + `listSends` (`produclist-backup-YYYY-MM-DD.json`).
+- Los archivos v1 (arreglo simple de productos) y v2 (sin listas enviadas) todavía se pueden importar.
+- La importación es vista previa + confirmación explícita, lee la partición propia del usuario y es idempotente: reimportar es un no-op.
+- Los borradores (`localStorage`) son autoguardado efímero y quedan deliberadamente fuera de los respaldos.
+
+## Funcionalidades
 
 ### Productos
-- **Lista editable** — agregar, editar y eliminar productos; el precio bruto se calcula automáticamente.
-- **Disponibilidad por producto** — cada producto se puede marcar como disponible o no disponible.
-- **Búsqueda y filtro** — búsqueda por nombre (atajo `Ctrl+/` o `Cmd+/`) y filtro "Solo disponibles".
-- **Agrupación por categoría** — secciones colapsables con conteo de productos y disponibles, ordenadas alfabéticamente dentro de cada categoría.
-- **Categorías** — Frutos Secos, Semillas/Cereal, Fruta Deshidratada y Legumbres.
+- **Lista editable** — agregar, editar y eliminar; el precio bruto se calcula automáticamente.
+- **Disponibilidad por producto.**
+- **Búsqueda y filtro** — por nombre y por "Solo disponibles".
+- **Agrupación por categoría** — secciones colapsables con conteo.
 
 ### Cotizador
-- **Armado de cotización** — selección de productos, cantidad y precio por kg editables.
-- **Totales en vivo** — total de kg, subtotal neto, IVA 19% y total a pagar.
-- **Cliente opcional** — nombre de cliente con autocompletado a partir de los nombres ya usados.
-- **Borrador autoguardado** — la cotización en curso se persiste con debounce (800 ms) y sobrevive a un refresh.
-- **Compartir** — copiar al portapapeles, enviar por WhatsApp y compartir con la Web Share API (cuando está disponible).
+- **Armado de cotización** — productos, cantidad y precio por kg editables.
+- **Totales en vivo** — kg, subtotal neto, IVA 19% y total.
+- **Cliente opcional** — con autocompletado.
+- **Borrador autoguardado** — sobrevive a un refresh.
+- **Compartir** — portapapeles, WhatsApp y Web Share API.
 
 ### Historial y clientes
-- **Historial de cotizaciones** — cotizaciones guardadas ordenadas de la más reciente a la más antigua, con detalle de ítems, totales y opción de eliminar.
-- **Listas enviadas** — snapshot de los precios actuales de los productos disponibles, asociado a un cliente (los precios se congelan tal como se informaron).
-- **Clientes** — para cada cliente, el último precio indicado por producto, consolidando listas enviadas y cotizaciones, con fecha y origen.
+- **Historial de cotizaciones.**
+- **Listas enviadas** — snapshot congelado de los precios informados a un cliente.
+- **Último precio por cliente** — consolidando listas enviadas y cotizaciones.
 
-### Respaldo y datos
-- **Exportación JSON** — descarga un backup con productos y cotizaciones (`produclist-backup-aaaa-mm-dd.json`).
-- **Importación con confirmación** — el archivo se valida y se compara contra la base antes de escribir nada (vista previa); recién se aplica al confirmar. Acepta el formato de backup v2 y también el formato v1 (arreglo simple de productos).
-- **Respaldo automático previo** — si la importación va a actualizar productos existentes, se descarga un backup del estado actual antes de aplicar cambios.
-- **Recordatorio de respaldo** — aviso cuando pasan 14 días sin exportar, con opción de posponerlo 3 días.
-
-### Exportación a PDF e instalación
-- **PDF de lista de precios** — `@react-pdf/renderer`, A4 horizontal, agrupado por categoría e incluyendo solo los productos disponibles. Columnas: producto (con formato), precio neto, precio bruto y total. Archivo `lista-precios-aaaa-mm-dd.pdf`.
-- **PWA instalable** — manifest y service worker (`vite-plugin-pwa`), con banner de instalación para Android Chrome.
+### Exportación e instalación
+- **PDF de lista de precios** — `@react-pdf/renderer`, A4 horizontal, agrupado por categoría e incluyendo solo los disponibles.
+- **PWA instalable** — manifest y service worker (`vite-plugin-pwa`).
 
 ### Interfaz
-- Notificaciones tipo toast (éxito, error, info y advertencia).
-- `ErrorBoundary` con pantalla de error y recuperación.
+- Notificaciones tipo toast (éxito, error, info, advertencia).
+- `ErrorBoundary` con pantalla de recuperación.
 - Estilos adaptables al modo oscuro según la preferencia del sistema.
 
-## Tech Stack
+### Base inicial
+44 productos sembrados por usuario: 12 Frutos Secos, 13 Semillas/Cereal, 11 Fruta Deshidratada y 8 Legumbres.
 
-| Dependencia | Versión | Uso |
-|-------------|---------|-----|
-| React + React DOM | ^19.2.6 | UI |
-| Vite | ^8.0.12 | Build y servidor de desarrollo |
-| TypeScript | ^5.8.0 | Tipado estático |
-| TailwindCSS | ^4.3.0 | Estilos |
-| React Router | ^7.15.1 | Ruteo de vistas |
-| Dexie | ^4.4.2 | Acceso a IndexedDB |
-| dexie-react-hooks | ^4.4.0 | Consultas reactivas (`useLiveQuery`) |
-| @react-pdf/renderer | ^4.5.1 | Generación del PDF |
-| vite-plugin-pwa | ^1.3.0 | Service worker y manifest |
-| Vitest | ^4.1.6 | Tests unitarios |
-| @testing-library/react | ^16.3.2 | Testing de componentes |
-| Playwright | ^1.60.0 | Tests end-to-end |
+## Menú
+
+Pantalla de login y acción "Cerrar sesión".
 
 ## Scripts
 
 | Comando | Acción |
 |---------|--------|
-| `pnpm dev` | Servidor de desarrollo de Vite |
-| `pnpm build` | Chequeo de tipos (`tsc -b`) y build de producción |
-| `pnpm lint` | ESLint sobre el proyecto |
-| `pnpm preview` | Sirve el build de producción |
-| `pnpm test` | Vitest en **modo watch** |
-| `pnpm coverage` | Vitest en modo run con reporte de cobertura (v8) |
+| `pnpm dev` | Servidor de desarrollo de Vite. |
+| `pnpm build` | `tsc -b` + `vite build`. |
+| `pnpm lint` | ESLint sobre el proyecto. |
+| `pnpm preview` | Sirve el build de producción. |
+| `pnpm coverage` | Corrida única de Vitest con cobertura; **el único comando unitario usado en CI**. |
 
-> `pnpm test` queda escuchando cambios. Para una corrida única (como en CI), usar `pnpm exec vitest run`.
+> `pnpm test` es modo **watch** (queda escuchando). Para una corrida única se usa `pnpm coverage`.
 
 ## Estructura del proyecto
 
 ```
 produclist/
-├── .github/workflows/ci.yml     # CI: lint, typecheck, unit tests y e2e
+├── .github/workflows/ci.yml     # CI: lint, typecheck, coverage y e2e (sin secretos)
 ├── e2e/                         # Tests end-to-end (Playwright)
-├── public/                      # Íconos PWA (favicon, 192x192, 512x512)
+│   ├── auth.spec.ts
+│   ├── diagnose.spec.ts
+│   └── responsive.spec.ts
+├── public/                      # Íconos PWA
 ├── src/
+│   ├── auth/                    # Sesión y login
+│   │   ├── AuthProvider.tsx     # Provider de sesión
+│   │   ├── useAuth.ts
+│   │   ├── LoginScreen.tsx
+│   │   ├── ports.ts             # Contrato AuthPort
+│   │   ├── supabaseAuth.ts      # Adaptador Supabase
+│   │   └── testing/             # fakeAuth para e2e
+│   ├── data/                    # Puertos y adaptadores de datos
+│   │   ├── ports.ts             # Contratos (Repositories)
+│   │   ├── DataProvider.tsx
+│   │   ├── useData.ts
+│   │   ├── ProductsCache.ts
+│   │   ├── seedProducts.ts      # 44 productos base
+│   │   ├── supabase/            # client, rows, mappers, *Repo, repositories
+│   │   ├── local/draftsRepo.ts  # Borradores en localStorage
+│   │   └── testing/             # inMemoryRepos y stub para e2e
 │   ├── components/              # Componentes de UI
-│   │   ├── ProductList.tsx          # Lista, búsqueda y filtro
-│   │   ├── CategoryGroup.tsx        # Sección colapsable por categoría
-│   │   ├── ProductRow.tsx           # Fila de producto
-│   │   ├── ProductForm.tsx          # Modal de alta/edición
-│   │   ├── Cotizador.tsx            # Armado de cotizaciones
-│   │   ├── QuoteItem.tsx            # Ítem de cotización
-│   │   ├── QuoteProductSelector.tsx # Selector de producto para cotizar
-│   │   ├── QuoteShareButton.tsx     # Copiar/WhatsApp/compartir
-│   │   ├── QuoteHistory.tsx         # Historial de cotizaciones
-│   │   ├── ClientPrices.tsx         # Precios por cliente
-│   │   ├── ListSendForm.tsx         # Guardar lista enviada
-│   │   ├── PDFButton.tsx            # Botón flotante de PDF
-│   │   ├── ConfirmDialog.tsx        # Diálogo de confirmación
-│   │   ├── BackupReminder.tsx       # Recordatorio de respaldo
-│   │   ├── InstallPrompt.tsx        # Banner de instalación PWA
-│   │   ├── Toast.tsx                # Notificación
-│   │   ├── ErrorBoundary.tsx        # Captura de errores de render
-│   │   └── ErrorFallback.tsx        # Pantalla de error
-│   ├── db/
-│   │   ├── database.ts          # Schema Dexie (products, quotes, drafts, listSends)
-│   │   └── seed.ts              # 44 productos iniciales
-│   ├── hooks/
-│   │   ├── useProducts.ts       # Productos reactivos (useLiveQuery)
-│   │   ├── useAddProduct.ts     # Alta de producto
-│   │   ├── useUpdateProduct.ts  # Edición de producto
-│   │   ├── useDeleteProduct.ts  # Baja de producto
-│   │   ├── useQuote.ts          # Estado y totales del cotizador + autosave
-│   │   ├── useToast.ts          # Contexto de toasts
-│   │   └── ToastProvider.tsx    # Proveedor de toasts
-│   ├── pdf/
-│   │   ├── ProductPDFDocument.tsx  # Documento PDF
-│   │   └── pdfFilename.ts          # Nombre del archivo PDF
-│   ├── types/
-│   │   ├── product.ts           # Product, ProductInput, Category
-│   │   ├── quote.ts             # QuoteItem, QuoteTotals
-│   │   └── listSend.ts          # ListSend, ListSendItem
-│   ├── utils/
-│   │   ├── price.ts             # Cálculo y formato de precios
-│   │   ├── exportImport.ts      # Export/import de backup JSON
-│   │   ├── listSend.ts          # Snapshot de precios para listas enviadas
-│   │   ├── clientTracking.ts    # Último precio por cliente
-│   │   └── backupReminder.ts    # Estado del recordatorio de respaldo
+│   ├── hooks/                   # useProducts, useQuote, useToast, etc.
+│   ├── pdf/                     # Documentos PDF (productos y cotización)
+│   ├── types/                   # product, quote, listSend, profile
+│   ├── utils/                   # price, exportImport, listSend, clientTracking, clientNames
+│   ├── Root.tsx                 # Auth gate + pantalla de config-error
+│   ├── App.tsx                  # Rutas y composición
+│   ├── main.tsx                 # Bootstrap de React
 │   ├── test-setup.ts            # Setup de Vitest
-│   ├── App.tsx                  # Rutas y composición de la app
-│   ├── App.css                  # Estilos de la app
-│   ├── index.css                # Estilos globales y Tailwind
-│   ├── vite-env.d.ts            # Tipos de Vite
-│   └── main.tsx                 # Bootstrap de React
+│   ├── index.css / App.css
+│   └── vite-env.d.ts
+├── supabase/
+│   ├── config.toml
+│   └── migrations/20261005000000_init.sql
 ├── playwright.config.ts
 ├── vitest.config.ts
 └── vite.config.ts
 ```
 
-Los tests unitarios están colocados junto al código, dentro de carpetas `__tests__/`.
-
 ## Testing
 
 ### Unitarios (Vitest)
 
-- Entorno `jsdom`, `globals: true` y setup en `src/test-setup.ts`.
-- Cobertura con provider `v8` sobre `src/**/*.ts` y `src/**/*.tsx`.
-- Cubren componentes, hooks, base de datos y utilidades.
+- Entorno `jsdom` con `globals: true` y setup en `src/test-setup.ts`.
+- Cobertura sobre `src/**` con umbrales 60/55/60/60 (statements/branches/functions/lines).
+- `src/data/testing/**` está excluido de la cobertura.
 
 ```bash
-pnpm test              # modo watch
-pnpm exec vitest run   # una corrida
-pnpm coverage          # corrida con cobertura
+pnpm coverage
 ```
 
 ### End-to-end (Playwright)
 
-- Configurados en `e2e/`, sobre una instancia de Vite (`pnpm dev --host 127.0.0.1`, puerto 5173).
-- Dos dispositivos emulados: `iphone-se` (375x667) e `iphone-14` (390x844), ambos mobile con touch.
+- Tests en `e2e/` (`auth`, `diagnose`, `responsive`) contra un servidor de desarrollo de Vite.
+- El `webServer` de `playwright.config.ts` exporta `VITE_E2E=1`, así que los e2e usan el stub.
+- Dos perfiles móviles: `iphone-se` (375x667) e `iphone-14` (390x844).
 
 ```bash
 pnpm exec playwright test
 ```
 
-### CI
+## CI
 
-El workflow `.github/workflows/ci.yml` corre en `push` y `pull_request` sobre `master`, con pnpm 11.2.2 y Node 22. Tiene dos jobs:
+`.github/workflows/ci.yml` corre en `push` y `pull_request` sobre `master`, **sin credenciales** (ningún secreto de Supabase). Tiene dos jobs:
 
-- **verify** — `pnpm lint`, `pnpm exec tsc -b` y `pnpm exec vitest run`.
+- **verify** — `pnpm lint`, `pnpm exec tsc -b` y `pnpm coverage`.
 - **e2e** — instala Chromium y ejecuta `pnpm exec playwright test`.
 
-## Notas
+## Cutover y migración por dispositivo
 
-- **Sin backend**: los datos persisten únicamente en IndexedDB dentro del navegador del usuario (Dexie). No hay servidor ni sincronización entre dispositivos.
-- **Offline**: el service worker cachea los assets de la app (y las fuentes de Google). La app funciona sin conexión una vez cargada.
-- **Respaldo**: como los datos son locales, la exportación JSON es la única forma de conservarlos al limpiar el navegador o cambiar de dispositivo.
-- **Base inicial**: al primer arranque, si la base está vacía, se cargan 44 productos (12 Frutos Secos, 13 Semillas/Cereal, 11 Fruta Deshidratada, 8 Legumbres).
-- **Cálculo de precios**: `precio bruto = redondeo(precio neto × 1.19)`; el total de una línea es `formato (kg) × precio bruto`. Los formatos usan coma decimal chilena (por ejemplo, `11,34`).
-- **Bundle del PDF**: el módulo de `@react-pdf/renderer` se carga con import dinámico en un chunk separado (`react-pdf`), fuera del bundle inicial.
+1. **Antes** — cada usuario exporta un backup v3 en su propio dispositivo y congela la carga de datos.
+2. **Cutover** — se mergea el tracker a `master` y se despliega (Vercel auto-despliega `master`).
+3. **Después** — cada usuario inicia sesión en su dispositivo, obtiene el seed de 44 productos por usuario e importa su propio archivo v3. La importación es aditiva y por dueño, así que reimportar es un no-op y no hace falta ninguna corrida canónica/central.
+4. **Rollback** — redeployar el build anterior (era Dexie) y reimportar el último archivo v3. Las escrituras en Supabase posteriores al cutover no se recuperan.
+5. **Gate Free → Pro** — los proyectos Supabase Free se pausan y son solo para desarrollo; hay que pasar a Pro (owner: Piwen) antes de que vendedores reales dependan de la app. Hasta entonces, el export/import manual v3 es la vía de recuperación.
+
+## Tech Stack
+
+| Dependencia | Uso |
+|-------------|-----|
+| React + React DOM 19 | UI |
+| Vite + TypeScript | Build y servidor de desarrollo |
+| TailwindCSS | Estilos |
+| React Router | Ruteo de vistas |
+| @supabase/supabase-js | Postgres + Auth + RLS |
+| @react-pdf/renderer | Generación del PDF |
+| vite-plugin-pwa | Service worker y manifest |
+| Vitest + Testing Library | Tests unitarios |
+| Playwright | Tests end-to-end |

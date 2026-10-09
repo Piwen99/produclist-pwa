@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildClientPriceHistory } from '../clientTracking';
 import type { ListSend } from '../../types/listSend';
-import type { SavedQuote } from '../../db/database';
+import type { SavedQuote } from '../../types/quote';
 
 const send = (fecha: string, nombre: string, precioNeto: number): ListSend => ({
   fecha: new Date(fecha),

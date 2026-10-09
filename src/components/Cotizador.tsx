@@ -3,7 +3,7 @@ import { QuoteItem } from './QuoteItem';
 import { QuoteProductSelector } from './QuoteProductSelector';
 import { QuoteShareButton } from './QuoteShareButton';
 import { QuotePDFButton } from './QuotePDFButton';
-import { saveQuote, getClientNames } from '../db/database';
+import { useData } from '../data/useData';
 import { useToast } from '../hooks/useToast';
 import type { QuoteItem as QuoteItemType, QuoteTotals } from '../types/quote';
 import type { Product } from '../types/product';
@@ -31,11 +31,12 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
   const [showSelector, setShowSelector] = useState(false);
   const [cliente, setCliente] = useState('');
   const [clients, setClients] = useState<string[]>([]);
+  const { repos } = useData();
   const { toast } = useToast();
 
   useEffect(() => {
-    void getClientNames().then(setClients).catch(console.error);
-  }, []);
+    void repos.clients.listNames().then(setClients).catch(console.error);
+  }, [repos]);
 
   const handleSave = async () => {
     if (items.length === 0) {
@@ -44,7 +45,7 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
     }
     try {
       const trimmed = cliente.trim();
-      await saveQuote({
+      await repos.quotes.create({
         items,
         cliente: trimmed === '' ? undefined : trimmed,
         totalNeto: totals.subtotal,

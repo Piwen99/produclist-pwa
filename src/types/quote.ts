@@ -23,3 +23,27 @@ export interface QuoteTotals {
   /** subtotal + iva */
   total: number;
 }
+
+export interface SavedQuote {
+  id?: number;
+  fecha: Date;
+  /** Free text typed by the user; optional. */
+  cliente?: string;
+  items: QuoteItem[];
+  totalNeto: number;
+  iva: number;
+  total: number;
+  ownerId?: string;
+}
+
+// Borrador de cotización (autosave): misma forma que SavedQuote pero sin
+// fecha y con una fila única de clave fija.
+export interface QuoteDraft {
+  id: 'draft';
+  items: QuoteItem[];
+  totalNeto: number;
+  iva: number;
+  total: number;
+}
+
+export const DRAFT_KEY = 'draft' as const;

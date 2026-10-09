@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { getPDFFileName } from '../pdf/pdfFilename';
+import { useData } from '../data/useData';
 
 interface PDFModule {
   PDFDownloadLink: typeof import('@react-pdf/renderer').PDFDownloadLink;
@@ -11,6 +12,7 @@ interface PDFButtonProps {
 }
 
 export function PDFButton({ disabled = false }: PDFButtonProps) {
+  const { products } = useData();
   const [pdfState, setPdfState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [pdfModule, setPdfModule] = useState<PDFModule | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -134,7 +136,7 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
   return (
     <>
       <pdfModule.PDFDownloadLink
-        document={<pdfModule.ProductPDFDocument />}
+        document={<pdfModule.ProductPDFDocument products={products ?? []} />}
         fileName={getPDFFileName()}
       >
         {({ loading, error }) => (

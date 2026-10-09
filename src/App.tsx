@@ -1,12 +1,12 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Routes, Route, NavLink } from 'react-router-dom';
-import { seedDatabase } from './db/seed';
 import { useProducts } from './hooks/useProducts';
 import { useAddProduct } from './hooks/useAddProduct';
 import { useUpdateProduct } from './hooks/useUpdateProduct';
 import { useDeleteProduct } from './hooks/useDeleteProduct';
 import { useQuote } from './hooks/useQuote';
 import { useToast } from './hooks/useToast';
+import { useAuth } from './auth/useAuth';
 import { ProductList } from './components/ProductList';
 import { ProductForm } from './components/ProductForm';
 import { PDFButton } from './components/PDFButton';
@@ -15,11 +15,10 @@ import { Cotizador } from './components/Cotizador';
 import { QuoteHistory } from './components/QuoteHistory';
 import { ClientPrices } from './components/ClientPrices';
 import { ConfirmDialog } from './components/ConfirmDialog';
-import { BackupReminder } from './components/BackupReminder';
 import { ListSendForm } from './components/ListSendForm';
-import { exportBackup, previewImport, applyImport, type ImportPreview } from './utils/exportImport';
+import { createBackupService, type ImportPreview } from './utils/exportImport';
 import { buildListSendItems } from './utils/listSend';
-import { saveListSend, getClientNames } from './db/database';
+import { useData } from './data/useData';
 import type { Product, ProductInput } from './types/product';
 import './App.css';
 
@@ -29,6 +28,13 @@ function App() {
   const { update } = useUpdateProduct();
   const { remove } = useDeleteProduct();
   const { toast } = useToast();
+  const { signOut } = useAuth();
+  const { repos, userId } = useData();
+
+  const backupService = useMemo(
+    () => createBackupService(repos, userId),
+    [repos, userId],
+  );
 
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -54,11 +60,6 @@ function App() {
     }
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showMobileMenu]);
-
-  // Seed database on mount
-  useEffect(() => {
-    seedDatabase().catch(console.error);
-  }, []);
 
   const handleAddNew = useCallback(() => {
     setShowForm(true);
@@ -119,31 +120,37 @@ function App() {
   }, [remove, toast]);
 
   const handleExportJSON = useCallback(() => {
-    if (!products) return;
-    void exportBackup(products);
-  }, [products]);
+    void backupService.exportBackup();
+  }, [backupService]);
 
   const handleOpenListSend = useCallback(() => {
-    void getClientNames().then(setClientNames).catch(console.error);
+    void repos.clients.listNames().then(setClientNames).catch(console.error);
     setShowListSendForm(true);
-  }, []);
+  }, [repos]);
 
   const handleSaveListSend = useCallback(async (cliente: string) => {
     setShowListSendForm(false);
     if (!products) return;
 
     try {
-      await saveListSend({ cliente, items: buildListSendItems(products) });
+      await repos.listSends.create({ cliente, items: buildListSendItems(products) });
       toast.success(`Lista enviada a ${cliente} guardada.`);
     } catch (error) {
       console.error('Error saving list send:', error);
       toast.error('No se pudo guardar la lista enviada.');
     }
-  }, [products, toast]);
+  }, [products, repos, toast]);
 
   const handleCancelListSend = useCallback(() => {
     setShowListSendForm(false);
   }, []);
+
+  const handleSignOut = useCallback(() => {
+    setShowMobileMenu(false);
+    void signOut().catch((error: unknown) => {
+      console.error('Error signing out:', error);
+    });
+  }, [signOut]);
 
   const handleImportClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -157,12 +164,13 @@ function App() {
 
     try {
       // Dry-run: validate and match against the catalog WITHOUT writing anything.
-      const preview = await previewImport(await file.text());
+      const preview = await backupService.previewImport(await file.text());
 
       if (
         preview.toAdd.length === 0 &&
         preview.toUpdate.length === 0 &&
-        preview.quotesToAdd.length === 0
+        preview.quotesToAdd.length === 0 &&
+        preview.listSendsToAdd.length === 0
       ) {
         toast.error(
           preview.errors.length > 0
@@ -178,7 +186,7 @@ function App() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al importar.');
     }
-  }, [toast]);
+  }, [backupService, toast]);
 
   const handleConfirmImport = useCallback(async () => {
     const preview = importPreview;
@@ -188,11 +196,11 @@ function App() {
     try {
       // Back up the current catalog before overwriting anything, so a wrong or
       // stale file can never destroy the price list irreversibly.
-      if (preview.toUpdate.length > 0 && products) {
-        await exportBackup(products);
+      if (preview.toUpdate.length > 0) {
+        await backupService.exportBackup();
       }
 
-      const result = await applyImport(preview);
+      const result = await backupService.applyImport(preview);
       const parts: string[] = [];
       if (result.success > 0) parts.push(`${String(result.success)} agregados`);
       if (result.updated > 0) parts.push(`${String(result.updated)} actualizados`);
@@ -207,7 +215,7 @@ function App() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al importar.');
     }
-  }, [importPreview, products, toast]);
+  }, [importPreview, backupService, toast]);
 
   const handleCancelImport = useCallback(() => {
     setImportPreview(null);
@@ -274,6 +282,15 @@ function App() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                       </svg>
                       Guardar lista enviada
+                    </button>
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Cerrar sesión
                     </button>
                   </div>
                 )}
@@ -354,7 +371,6 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
-        {hasProducts && <BackupReminder onExport={handleExportJSON} />}
         <Routes>
           <Route index element={
             <ProductList

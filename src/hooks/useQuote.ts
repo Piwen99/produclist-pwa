@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { QuoteItem, QuoteTotals } from '../types/quote';
 import type { Product } from '../types/product';
 import { tryParseChileanNumber } from '../utils/price';
-import { saveQuoteDraft, loadQuoteDraft, clearQuoteDraft } from '../db/database';
+import { createLocalDraftsRepo } from '../data/local/draftsRepo';
 
 interface UseQuoteReturn {
   items: QuoteItem[];
@@ -17,8 +17,13 @@ interface UseQuoteReturn {
 const DRAFT_DEBOUNCE_MS = 800;
 
 export function useQuote(): UseQuoteReturn {
-  const [items, setItems] = useState<QuoteItem[]>([]);
-  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [draftsRepo] = useState(createLocalDraftsRepo);
+  // Load the stored draft synchronously before the first render, so a refresh
+  // restores the cart and there is no window where autosave could clobber it.
+  const [items, setItems] = useState<QuoteItem[]>(() => {
+    const draft = draftsRepo.load();
+    return draft && Array.isArray(draft.items) && draft.items.length > 0 ? draft.items : [];
+  });
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const itemsRef = useRef<QuoteItem[]>(items);
 
@@ -26,26 +31,6 @@ export function useQuote(): UseQuoteReturn {
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
-
-  // ── Cargar borrador guardado al montar (autosave: sobrevive refresh) ──
-  useEffect(() => {
-    let cancelled = false;
-    loadQuoteDraft().then(draft => {
-      if (!cancelled && draft && draft.items.length > 0) {
-        setItems(draft.items);
-      }
-      if (!cancelled) {
-        setDraftLoaded(true);
-      }
-    }).catch(() => {
-      if (!cancelled) {
-        setDraftLoaded(true);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   // ── Autosave con debounce: cada mutación persiste el borrador ──
   const totals = useMemo<QuoteTotals>(() => {
@@ -67,8 +52,6 @@ export function useQuote(): UseQuoteReturn {
   }, [items]);
 
   useEffect(() => {
-    if (!draftLoaded) return; // esperar la carga inicial antes de sobreescribir
-
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
     }
@@ -79,10 +62,16 @@ export function useQuote(): UseQuoteReturn {
         iva: totals.iva,
         total: totals.total,
       };
-      if (draft.items.length === 0) {
-        clearQuoteDraft().catch(() => {});
-      } else {
-        saveQuoteDraft(draft).catch(() => {});
+      try {
+        if (draft.items.length === 0) {
+          draftsRepo.clear();
+        } else {
+          draftsRepo.save(draft);
+        }
+      } catch (error) {
+        // localStorage can throw synchronously (quota, private mode); autosave
+        // is best-effort and must never crash the cotizador.
+        console.error('[useQuote] No se pudo guardar el borrador', error);
       }
     }, DRAFT_DEBOUNCE_MS);
 
@@ -91,7 +80,7 @@ export function useQuote(): UseQuoteReturn {
         clearTimeout(saveTimer.current);
       }
     };
-  }, [items, totals, draftLoaded]);
+  }, [items, totals, draftsRepo]);
 
   const addItem = useCallback((product: Product) => {
     if (product.id === undefined) return;

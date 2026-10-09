@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { db, getClientNames } from '../db/database';
+import { useData } from '../data/useData';
 import { buildClientPriceHistory, type ClientPriceEntry } from '../utils/clientTracking';
 import { formatCurrency } from '../utils/price';
 
@@ -19,15 +19,17 @@ export function ClientPrices() {
   const [selected, setSelected] = useState('');
   const [entries, setEntries] = useState<ClientPriceEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const { repos } = useData();
 
   useEffect(() => {
-    void getClientNames()
+    void repos.clients
+      .listNames()
       .then((names) => {
         setClients(names);
         setSelected((current) => current || names[0] || '');
       })
       .catch(console.error);
-  }, []);
+  }, [repos]);
 
   useEffect(() => {
     let cancelled = false;
@@ -41,9 +43,10 @@ export function ClientPrices() {
 
       // Match client names case-insensitively: the stored casing is free text.
       const key = selected.trim().toLowerCase();
+      // RLS-visible union: an admin sees every owner's rows, a vendor own only.
       const [sends, quotes] = await Promise.all([
-        db.listSends.toArray(),
-        db.quotes.toArray(),
+        repos.listSends.list(),
+        repos.quotes.list(),
       ]);
 
       if (!cancelled) {
@@ -61,7 +64,7 @@ export function ClientPrices() {
     return () => {
       cancelled = true;
     };
-  }, [selected]);
+  }, [repos, selected]);
 
   if (clients.length === 0 && !loading) {
     return (
