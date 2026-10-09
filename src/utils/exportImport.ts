@@ -51,14 +51,39 @@ function backupFilename(now: Date = new Date()): string {
   return `produclist-backup-${y}-${m}-${d}.json`;
 }
 
-/** Format a date as `yyyy-mm-dd` for import error labels. */
+/**
+ * Format a date as `yyyy-mm-dd` using the LOCAL calendar day (matching
+ * `backupFilename`). Import error labels must read the day the user sees on
+ * their device; `toISOString()` is UTC and can be off by one at day boundaries.
+ */
 function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  const y = String(date.getFullYear());
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
-/** Human label for a list send that failed to import. */
-function listSendLabel(send: ListSend): string {
-  const cliente = send.cliente.trim();
+/** Trim a client name, tolerating a malformed non-string value. */
+function normalizedCliente(cliente: unknown): string {
+  return typeof cliente === 'string' ? cliente.trim() : '';
+}
+
+/**
+ * Human label for a quote that failed to import. Throw-safe by construction: an
+ * unusable date degrades to a generic label so the per-item catch can never
+ * throw while building the label and abandon the remaining records.
+ */
+function quoteLabel(quote: { fecha: unknown }): string {
+  const fecha = quote.fecha;
+  if (!(fecha instanceof Date) || Number.isNaN(fecha.getTime())) {
+    return '(cotización)';
+  }
+  return `(cotización del ${isoDate(fecha)})`;
+}
+
+/** Human label for a list send that failed to import. Throw-safe on client name. */
+function listSendLabel(send: { cliente: unknown }): string {
+  const cliente = normalizedCliente(send.cliente);
   return cliente ? `(lista enviada de ${cliente})` : '(lista enviada)';
 }
 
@@ -173,7 +198,7 @@ function quoteSignature(quote: SavedQuote): string {
 export function listSendSignature(send: ListSend): string {
   return JSON.stringify({
     fecha: new Date(send.fecha).toISOString(),
-    cliente: send.cliente.trim().toLowerCase(),
+    cliente: normalizedCliente(send.cliente).toLowerCase(),
     items: send.items.map((i) => ({
       nombre: i.nombre,
       formato: i.formato,
@@ -417,7 +442,7 @@ function createApplyImport(
         result.quotesAdded++;
       } catch (err) {
         result.errors.push({
-          nombre: `(cotización del ${isoDate(quote.fecha)})`,
+          nombre: quoteLabel(quote),
           error: err instanceof Error ? err.message : 'Error desconocido.',
         });
       }
