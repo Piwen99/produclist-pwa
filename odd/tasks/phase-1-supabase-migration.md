@@ -865,7 +865,7 @@ upsert, which is outside this candidate's scope.
 ### Pre-cutover hardening (`fix/cutover-hardening`)
 
 Resolves the migration-affecting deferred advisories; branch `fix/cutover-hardening`
-(base = tracker).
+(base = tracker) → **PR #51**.
 
 - `src/utils/exportImport.ts`: the quote and list-send apply loops are now **per-item
   resilient** (own try/catch, continue past a failure, descriptive labels
