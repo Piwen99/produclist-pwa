@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
 import { getPDFFileName } from '../pdf/pdfFilename';
 import { useData } from '../data/useData';
+import { usePdfModule } from '../pdf/usePdfModule';
 
 interface PDFModule {
   PDFDownloadLink: typeof import('@react-pdf/renderer').PDFDownloadLink;
@@ -11,57 +11,23 @@ interface PDFButtonProps {
   disabled?: boolean;
 }
 
+const loadPdfModule = async (): Promise<PDFModule> => {
+  const mod = await import('../pdf/ProductPDFDocument');
+  return {
+    PDFDownloadLink: mod.PDFDownloadLink,
+    ProductPDFDocument: mod.ProductPDFDocument,
+  };
+};
+
 export function PDFButton({ disabled = false }: PDFButtonProps) {
   const { products } = useData();
-  const [pdfState, setPdfState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [pdfModule, setPdfModule] = useState<PDFModule | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const retryTimeoutRef = useRef<number | undefined>(undefined);
-
-  // Preload PDF module on mount
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadModule = async () => {
-      try {
-        const mod = await import('../pdf/ProductPDFDocument');
-        if (!cancelled) {
-          setPdfModule({
-            PDFDownloadLink: mod.PDFDownloadLink,
-            ProductPDFDocument: mod.ProductPDFDocument,
-          });
-          setPdfState('ready');
-        }
-      } catch (err) {
-        console.error('Failed to load PDF module:', err);
-        if (!cancelled) {
-          setPdfState('error');
-          // Retry after delay
-          retryTimeoutRef.current = window.setTimeout(() => {
-            if (!cancelled) {
-              setRetryCount((r) => r + 1);
-              setPdfState('loading');
-            }
-          }, 2000);
-        }
-      }
-    };
-
-    void loadModule();
-
-    return () => {
-      cancelled = true;
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
-    };
-  }, [retryCount]); // Retry when retryCount changes
+  const { status, module: pdfModule, reload } = usePdfModule(loadPdfModule);
 
   // Error state
-  if (pdfState === 'error' && !pdfModule) {
+  if (status === 'error') {
     return (
       <button
-        disabled
+        onClick={reload}
         className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6
           flex items-center gap-2
           px-4 sm:px-6 py-3 sm:py-4
@@ -69,8 +35,8 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
           font-medium text-sm sm:text-base
           transition-all duration-200
           touch-manipulation
-          bg-gray-400 cursor-not-allowed shadow-none"
-        aria-label="Error al cargar PDF"
+          bg-amber-500 hover:bg-amber-600 text-white active:scale-95"
+        aria-label="Actualizar PDF"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -83,17 +49,17 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth={2}
-            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
           />
         </svg>
-        <span className="hidden sm:inline">Error al cargar PDF</span>
-        <span className="sm:hidden">Error</span>
+        <span className="hidden sm:inline">Actualizar PDF</span>
+        <span className="sm:hidden">Actualizar</span>
       </button>
     );
   }
 
   // Loading state
-  if (pdfState === 'loading' || !pdfModule) {
+  if (status === 'loading' || !pdfModule) {
     return (
       <button
         disabled

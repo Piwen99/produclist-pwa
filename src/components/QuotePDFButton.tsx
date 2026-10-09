@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
 import { getQuotePDFFileName } from '../pdf/quotePdfFilename';
+import { usePdfModule } from '../pdf/usePdfModule';
 import type { QuoteItem, QuoteTotals } from '../types/quote';
 
 interface QuotePDFModule {
@@ -19,6 +19,8 @@ const SPINNER_PATH =
 const DOCUMENT_PATH =
   'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z';
 const ERROR_PATH = 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
+const REFRESH_PATH =
+  'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15';
 
 function Spinner() {
   return (
@@ -37,72 +39,38 @@ function Spinner() {
 const baseButtonClass =
   'flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium text-white rounded-md transition-colors touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed';
 
+const loadQuotePdfModule = async (): Promise<QuotePDFModule> => {
+  const mod = await import('../pdf/QuotePDFDocument');
+  return {
+    PDFDownloadLink: mod.PDFDownloadLink,
+    QuotePDFDocument: mod.QuotePDFDocument,
+  };
+};
+
 export function QuotePDFButton({ items, totals, cliente, disabled = false }: QuotePDFButtonProps) {
-  const [pdfState, setPdfState] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [pdfModule, setPdfModule] = useState<QuotePDFModule | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const retryTimeoutRef = useRef<number | undefined>(undefined);
+  const { status, module: pdfModule, reload } = usePdfModule(loadQuotePdfModule);
 
   const isEmpty = items.length === 0;
   const isDisabled = disabled || isEmpty;
 
-  // Preload the PDF module on mount so the button is ready before first click.
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadModule = async () => {
-      try {
-        const mod = await import('../pdf/QuotePDFDocument');
-        if (!cancelled) {
-          setPdfModule({
-            PDFDownloadLink: mod.PDFDownloadLink,
-            QuotePDFDocument: mod.QuotePDFDocument,
-          });
-          setPdfState('ready');
-        }
-      } catch (err) {
-        console.error('Failed to load quote PDF module:', err);
-        if (!cancelled) {
-          setPdfState('error');
-          // Retry after delay, mirroring PDFButton's recovery.
-          retryTimeoutRef.current = window.setTimeout(() => {
-            if (!cancelled) {
-              setRetryCount((r) => r + 1);
-              setPdfState('loading');
-            }
-          }, 2000);
-        }
-      }
-    };
-
-    void loadModule();
-
-    return () => {
-      cancelled = true;
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
-    };
-  }, [retryCount]);
-
-  // Error state — the module could not be imported; the retry timer is pending.
-  if (pdfState === 'error' && !pdfModule) {
+  // Error state — the module could not be imported.
+  if (status === 'error') {
     return (
       <button
-        disabled
-        className={`${baseButtonClass} bg-gray-400 cursor-not-allowed shadow-none`}
-        aria-label="Error al cargar PDF"
+        onClick={reload}
+        className={`${baseButtonClass} bg-amber-500 hover:bg-amber-600`}
+        aria-label="Actualizar PDF"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={ERROR_PATH} />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={REFRESH_PATH} />
         </svg>
-        <span>Error PDF</span>
+        <span>Actualizar</span>
       </button>
     );
   }
 
   // Loading state — module still being imported.
-  if (pdfState === 'loading' || !pdfModule) {
+  if (status === 'loading' || !pdfModule) {
     return (
       <button
         disabled
