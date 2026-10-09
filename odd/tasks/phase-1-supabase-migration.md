@@ -817,27 +817,24 @@ work, never as a reason to re-review this candidate.
 
 ### Advisory findings from the T10 review (non-blocking)
 
-- `R3-1` (WARNING, `src/utils/exportImport.ts:399-408`) — quote import is no longer
-  atomic: the base `bulkAdd` was all-or-nothing, the new per-quote `quotes.create`
-  loop persists N-1 then reports a partial `quotesAdded` on the Nth failure. The
-  mid-loop failure path is untested. **Candidate regression vs base; deferred to a
-  follow-up (not fixed in T11).**
-- `R3-2` (WARNING, `src/utils/exportImport.ts:430-436`) — same non-atomic regression
-  for list-send import (per-send create vs base `bulkAdd`).
-- `R3-3` (WARNING, `src/components/QuoteHistory.tsx:123`) — an admin sees every
-  owner's quotes via `repos.quotes.list()` but deletes through owner-scoped
-  `repos.quotes.remove(id)`, so a foreign row renders a delete control whose only
-  outcome is the `OwnershipError` toast. **Hide/disable delete for non-own rows**
-  (the design's admin view is read-only for foreign rows).
+- `R3-1` (WARNING, `src/utils/exportImport.ts`) — quote import lost the base
+  `bulkAdd` atomicity: the per-quote `quotes.create` loop persisted N-1 then abandoned
+  the rest on the Nth failure, with an opaque error. **RESOLVED** by the pre-cutover
+  hardening (per-item resilience; see below).
+- `R3-2` (WARNING, `src/utils/exportImport.ts`) — same for list-send import.
+  **RESOLVED** by the pre-cutover hardening.
+- `R3-3` (WARNING, `src/components/QuoteHistory.tsx`) — an admin saw every owner's
+  quotes but deleted through owner-scoped `repos.quotes.remove(id)`, so a foreign row
+  rendered a delete control whose only outcome was the `OwnershipError` toast.
+  **RESOLVED** by the pre-cutover hardening (delete hidden for non-own rows).
 
 ### Advisory findings from the T11 review (non-blocking)
 
-- `R3-1` (WARNING, `src/data/DataProvider.tsx:40-46`) — the first load is now gated
-  behind an un-cancellable, timeout-less `seedIfEmpty`. A rejected seed is only
-  `console.error`'d (first-run user silently gets an empty catalog, no retry), and a
-  seed that never settles means `refresh()` never runs. The `active` flag only
-  suppresses post-unmount writes; it neither aborts nor bounds the seed. **Consider a
-  timeout or surfacing the seed failure in a follow-up.**
+- `R3-1` (WARNING, `src/data/DataProvider.tsx`) — the first load was gated behind an
+  un-cancellable, timeout-less `seedIfEmpty` (a rejected seed silently yielded an empty
+  catalog; a non-settling seed meant `refresh()` never ran). **PARTIALLY RESOLVED** by
+  the pre-cutover hardening (`withTimeout(SEED_TIMEOUT_MS)` so `refresh()` always
+  runs); the user-visible signal / retry remains open.
 - `R3-2` (SUGGESTION, `src/data/__tests__/DataProvider.test.tsx:290-292`) — the new
   "seeds before the first refresh" test asserts the call and that `list` ran, but not
   the *ordering*. An ordering assertion would prove the sequencing.
@@ -865,6 +862,38 @@ upsert, which is outside this candidate's scope.
   path (empty Supabase config), so nothing proves the `resolveRepositories` branch
   falls back to Supabase repos under `VITE_E2E=1` + production.
 
+### Pre-cutover hardening (`fix/cutover-hardening`)
+
+Resolves the migration-affecting deferred advisories; branch `fix/cutover-hardening`
+(base = tracker).
+
+- `src/utils/exportImport.ts`: the quote and list-send apply loops are now **per-item
+  resilient** (own try/catch, continue past a failure, descriptive labels
+  `(cotización del <yyyy-mm-dd>)` / `(lista enviada de <cliente>)`); `quotesAdded`/
+  `listSendsAdded` reflect exactly what persisted. Resolves T10 `R3-1`/`R3-2`. New
+  tests cover the mid-batch rejection (later records still persist).
+- `src/data/DataProvider.tsx`: `withTimeout(seedIfEmpty, SEED_TIMEOUT_MS=10_000)` so a
+  hung seed cannot block the first refresh. Addresses T11 `R3-1` (signal/retry open).
+- `src/components/QuoteHistory.tsx`: delete hidden when `quote.ownerId !== userId`.
+  Resolves T10 `R3-3`.
+
+GREEN: `pnpm coverage` `465 passed (465)` (47 files), 78.6/71.72/82.4/80.53 (60/55/60/60
+held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0; `pnpm exec playwright test` 18
+passed. Native RDD review (lineage `review-aa29326528dc1d94`, tier medium, 1 lens
+`review-reliability`) **approved**, no correction, authority burned. Commits: `4c79548`
++ `2ab2914` + `c815903`. Advisories below.
+
+### Advisory findings from the pre-cutover hardening review (non-blocking)
+
+- `R3-001` (WARNING, `src/utils/exportImport.ts:420`) — the failure labels are built
+  inside the catch (`isoDate` → `toISOString`, `listSendLabel` → `trim`); an invalid
+  `Date` or non-string `cliente` would throw while building the label and escape the
+  catch, abandoning the rest. **Not reachable via the real flow**: `parseQuoteItem`
+  rejects invalid dates and `parseListSendItem` coerces `cliente` to a string.
+  Defensive hardening left as a follow-up.
+- `R3-002` (SUGGESTION, `src/utils/exportImport.ts:56`) — `isoDate` uses UTC
+  (`toISOString`), so the label day can differ by one from the locally formatted date.
+
 Operational milestones (not authored work units):
 
 - M1 (pre-cutover): slice 1 merged to `master`; tracker slices green; dev-project
@@ -875,18 +904,22 @@ Operational milestones (not authored work units):
   seed, imports their own v3 file; per-user verification above passes.
 - M4 (go-live gate): upgrade to Pro or sign off the exception (owner: Piwen).
 
-**Next step**: T1–T12 are implemented and tracked; the change is at the **cutover gate**
-(PR11 = tracker → `master`). Remaining operational work, in order: merge the child PRs to
-the tracker (T12 `chore/ci-and-docs` base = `feat/retire-dexie`/PR #49, which in turn
-merges to the tracker); complete M1 (dev-project migrations + 5 dev accounts + admin
-`rol` + RLS probe + integration checklist); run M2 (each user exports v3 and freezes
-entry; prod resources created; tracker merged to `master` and deployed); then M3/M4.
-T12 is closed — reviewed (approved, tier high, 4 lenses) with 4 non-blocking suggestions
-recorded above. Deferred follow-ups: T11 `R3-1` (un-bounded/un-retried `seedIfEmpty`
-gate) + `R3-2`/`R3-3` (seed coverage); T10 `R3-1`/`R3-2` non-atomic import and `R3-3`
-admin foreign-row delete. Before cutover, re-run the T3 RLS probe against the linked dev
-project (Decision 14) and run the regression sweep (`pnpm lint`, `pnpm exec tsc -b`,
-`pnpm coverage`, `pnpm exec playwright test`).
+**Next step**: T1–T12 are implemented and tracked, and the **pre-cutover hardening**
+(`fix/cutover-hardening` → PR pending, base = tracker) resolves the migration-affecting
+advisories. The change is at the **cutover gate** (PR11 = tracker → `master`). Fase 0 of
+the cutover is done: #50 and #49 merged to the tracker; regression sweep green; the dev
+project (`ptsvftbnfmflgcgmmymr`) was migrated (`supabase db push`) and passed the
+structural + anon RLS probe (RLS on 4 tables, 13 policies, `is_admin` SECDEF, trigger,
+anon 0 grants → `42501`); `#39` CI green. Remaining, in order: merge
+`fix/cutover-hardening` and any follow-ups to the tracker; **M1** (provision the 5
+accounts in the dev dashboard + admin `rol`, then run the **functional** RLS probe —
+vendor own-only, foreign update 0, admin sees all, `owner_id`, `23505`); **M2** (Vercel
+`VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` for Production, prod Supabase project, user
+v3 export + freeze, then merge #39 → `master` → Vercel deploy); **M3** per-device
+sign-in + v3 import; **M4 dropped** (Supabase Pro not required per Piwen). Open follow-ups:
+T12 review suggestions; hardening `R3-001` (defensive labels) / `R3-002` (UTC label);
+T11 `R3-2`/`R3-3` (seed coverage). Before cutover, re-run the regression sweep
+(`pnpm lint`, `pnpm exec tsc -b`, `pnpm coverage`, `pnpm exec playwright test`).
 
 ## Delivery strategy + slice boundaries
 
