@@ -11,6 +11,29 @@ interface DataProviderProps {
   children: ReactNode;
 }
 
+/** Upper bound on the mount seed so a hung seed cannot block the first load. */
+export const SEED_TIMEOUT_MS = 10_000;
+
+/**
+ * Race `promise` against a timer. The timer is cleared in a `finally` so a
+ * successful (or rejected) seed leaves no dangling rejection behind.
+ */
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`Seed timed out after ${String(ms)}ms`));
+        }, ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 /**
  * Owns the products cache and exposes the repository seam. Server-first: every
  * mutation re-reads the RLS-visible set, and a failed read keeps the last good
@@ -38,7 +61,7 @@ export function DataProvider({ repos, userId, children }: DataProviderProps) {
     let active = true;
     const bootstrap = async () => {
       try {
-        await repos.products.seedIfEmpty(userId, seedProducts);
+        await withTimeout(repos.products.seedIfEmpty(userId, seedProducts), SEED_TIMEOUT_MS);
       } catch (error) {
         console.error('[DataProvider] Failed to seed products', error);
       }

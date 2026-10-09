@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { StrictMode, type ReactNode } from 'react';
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
-import { DataProvider } from '../DataProvider';
+import { DataProvider, SEED_TIMEOUT_MS } from '../DataProvider';
 import { useData } from '../useData';
 import { createInMemoryRepositories } from '../testing/inMemoryRepos';
 import { seedProducts } from '../seedProducts';
@@ -305,6 +305,37 @@ describe('DataProvider', () => {
       '[DataProvider] Failed to seed products',
       expect.any(Error),
     );
+  });
+
+  it('still refreshes when seeding never settles (bounded wait)', async () => {
+    vi.useFakeTimers();
+    try {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const seedIfEmpty = vi
+        .fn<ProductsRepo['seedIfEmpty']>()
+        .mockReturnValue(new Promise(() => {}));
+      const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
+      renderProbe(withProducts(createRepo({ seedIfEmpty, list })));
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(seedIfEmpty).toHaveBeenCalledTimes(1);
+      expect(list).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(SEED_TIMEOUT_MS);
+      });
+
+      expect(list).toHaveBeenCalledTimes(1);
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[DataProvider] Failed to seed products',
+        expect.any(Error),
+      );
+      expect(screen.getByTestId('count')).toHaveTextContent('1');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('refreshes on mount under StrictMode without leaking subscriptions', async () => {
