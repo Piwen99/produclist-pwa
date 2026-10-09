@@ -271,6 +271,34 @@ describe('createBackupService (owner-scoped preview/apply)', () => {
       await service.previewImport(backupV2([], [sampleQuote]));
       expect(await repos.quotes.listOwn(PRINCIPAL.userId)).toHaveLength(0);
     });
+
+    it('continues past a failing quote so later quotes still persist', async () => {
+      const quotes = [1, 2, 3].map((n) => ({
+        ...sampleQuote,
+        fecha: new Date(`2026-09-2${n}T10:00:00.000Z`),
+        cliente: `Cliente ${n}`,
+        totalNeto: sampleQuote.totalNeto + n,
+        total: sampleQuote.total + n,
+      }));
+      const preview = await service.previewImport(backupV2([], quotes));
+      expect(preview.quotesToAdd).toHaveLength(3);
+
+      const realCreate = repos.quotes.create.bind(repos.quotes);
+      let calls = 0;
+      repos.quotes.create = (data) => {
+        calls += 1;
+        if (calls === 2) return Promise.reject(new Error('quote write failed'));
+        return realCreate(data);
+      };
+
+      const result = await service.applyImport(preview);
+
+      expect(result.quotesAdded).toBe(2);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].nombre).toBe('(cotización del 2026-09-22)');
+      expect(result.errors[0].error).toBe('quote write failed');
+      expect(await repos.quotes.listOwn(PRINCIPAL.userId)).toHaveLength(2);
+    });
   });
 
   describe('list sends', () => {
@@ -332,6 +360,45 @@ describe('createBackupService (owner-scoped preview/apply)', () => {
     it('preview writes no list sends either', async () => {
       await service.previewImport(backupV3([], [], [sampleSend]));
       expect(await repos.listSends.listOwn(PRINCIPAL.userId)).toHaveLength(0);
+    });
+
+    it('continues past a failing list send so later sends still persist', async () => {
+      const sends = [1, 2, 3].map((n) => ({
+        ...sampleSend,
+        fecha: new Date(`2026-09-2${n}T10:00:00.000Z`),
+        cliente: `Cliente ${n}`,
+      }));
+      const preview = await service.previewImport(backupV3([], [], sends));
+      expect(preview.listSendsToAdd).toHaveLength(3);
+
+      const realCreate = repos.listSends.create.bind(repos.listSends);
+      let calls = 0;
+      repos.listSends.create = (data) => {
+        calls += 1;
+        if (calls === 2) return Promise.reject(new Error('send write failed'));
+        return realCreate(data);
+      };
+
+      const result = await service.applyImport(preview);
+
+      expect(result.listSendsAdded).toBe(2);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].nombre).toBe('(lista enviada de Cliente 2)');
+      expect(result.errors[0].error).toBe('send write failed');
+      expect(await repos.listSends.listOwn(PRINCIPAL.userId)).toHaveLength(2);
+    });
+
+    it('labels a nameless-client send failure as (lista enviada)', async () => {
+      const preview = await service.previewImport(
+        backupV3([], [], [{ ...sampleSend, cliente: '   ' }])
+      );
+      repos.listSends.create = () => Promise.reject(new Error('nope'));
+
+      const result = await service.applyImport(preview);
+
+      expect(result.listSendsAdded).toBe(0);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].nombre).toBe('(lista enviada)');
     });
   });
 
