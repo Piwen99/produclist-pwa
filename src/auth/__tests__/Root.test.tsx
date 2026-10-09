@@ -30,6 +30,18 @@ describe('Root auth gate', () => {
     expect(screen.queryByRole('button', { name: 'Iniciar sesión' })).not.toBeInTheDocument();
   });
 
+  it('ignores the e2e bypass in a production build', () => {
+    vi.stubEnv('VITE_E2E', '1');
+    vi.stubEnv('PROD', 'true');
+    vi.stubEnv('VITE_SUPABASE_URL', '');
+    vi.stubEnv('VITE_SUPABASE_ANON_KEY', '');
+
+    render(<Root />);
+
+    expect(screen.getByText(/no configurada/i)).toBeInTheDocument();
+    expect(screen.queryByText('AuthenticatedApp')).not.toBeInTheDocument();
+  });
+
   it('renders the login screen when the e2e auth starts off', async () => {
     vi.stubEnv('VITE_E2E', '1');
     localStorage.setItem('e2e:auth', 'off');
