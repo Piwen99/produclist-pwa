@@ -141,7 +141,16 @@ describe('product mutation hooks', () => {
   });
 
   it('runs the full add/update/delete flow through in-memory ports', async () => {
-    const repos = createInMemoryRepositories({ userId: 'user-1', isAdmin: false });
+    const base = createInMemoryRepositories({ userId: 'user-1', isAdmin: false });
+    // The provider seeds the base catalog on mount; this flow test starts from
+    // an empty owned set, so seeding is neutralized.
+    const repos: Repositories = {
+      ...base,
+      products: {
+        ...base.products,
+        seedIfEmpty: vi.fn<ProductsRepo['seedIfEmpty']>().mockResolvedValue(undefined),
+      },
+    };
     const { result } = renderHook(() => useProductsAndMutations(), {
       wrapper: wrapperFor(repos),
     });

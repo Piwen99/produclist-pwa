@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createE2eRepositories } from '../testing/stub';
-import { seedProducts } from '../../db/seed';
+import { seedProducts } from '../seedProducts';
 
 describe('createE2eRepositories', () => {
   it('seeds the default e2e user with the full product catalog', async () => {

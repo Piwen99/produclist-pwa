@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { createProductsCache, useProductsSnapshot } from './ProductsCache';
 import type { Repositories } from './ports';
 import { DataContext, type DataContextValue } from './useData';
+import { seedProducts } from './seedProducts';
 import type { Product, ProductInput } from '../types/product';
 
 interface DataProviderProps {
@@ -34,8 +35,21 @@ export function DataProvider({ repos, userId, children }: DataProviderProps) {
   }, [repos, cache]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let active = true;
+    const bootstrap = async () => {
+      try {
+        await repos.products.seedIfEmpty(userId, seedProducts);
+      } catch (error) {
+        console.error('[DataProvider] Failed to seed products', error);
+      }
+      if (!active) return;
+      await refresh();
+    };
+    void bootstrap();
+    return () => {
+      active = false;
+    };
+  }, [repos, userId, refresh]);
 
   useEffect(() => {
     const handleVisibility = () => {

@@ -12,8 +12,12 @@ import type { Repositories } from './data/ports';
 import type { AuthPort } from './auth/ports';
 import App from './App';
 
+function isE2eEnabled(): boolean {
+  return import.meta.env.VITE_E2E === '1' && !import.meta.env.PROD;
+}
+
 function resolveAuthPort(): AuthPort | null {
-  if (import.meta.env.VITE_E2E === '1') {
+  if (isE2eEnabled()) {
     return createE2eAuth();
   }
   if (!readSupabaseConfig()) {
@@ -23,7 +27,7 @@ function resolveAuthPort(): AuthPort | null {
 }
 
 function resolveRepositories(userId: string): Repositories {
-  if (import.meta.env.VITE_E2E === '1') {
+  if (isE2eEnabled()) {
     return createE2eRepositories({ userId, isAdmin: false });
   }
   return createSupabaseRepositories(createSupabaseClient());

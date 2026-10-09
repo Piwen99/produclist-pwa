@@ -1,4 +1,4 @@
-import { seedProducts } from '../../db/seed';
+import { seedProducts } from '../seedProducts';
 import type { Repositories } from '../ports';
 import { createInMemoryRepositories, type Principal } from './inMemoryRepos';
 

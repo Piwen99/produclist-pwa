@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createLocalDraftsRepo, DRAFT_STORAGE_KEY } from '../local/draftsRepo';
-import type { QuoteDraft } from '../../../db/database';
-import type { QuoteItem } from '../../../types/quote';
+import type { QuoteDraft } from '../../types/quote';
+import type { QuoteItem } from '../../types/quote';
 
 const ITEM: QuoteItem = {
   id: 'i1',
