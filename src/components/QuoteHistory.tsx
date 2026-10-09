@@ -25,9 +25,10 @@ function formatDate(date: Date): string {
 interface QuoteCardProps {
   quote: SavedQuote;
   onDelete: (id: number) => void;
+  canDelete: boolean;
 }
 
-function QuoteCard({ quote, onDelete }: QuoteCardProps) {
+function QuoteCard({ quote, onDelete, canDelete }: QuoteCardProps) {
   const handleDelete = () => {
     if (quote.id === undefined) return;
     if (confirm('¿Eliminar esta cotización?')) {
@@ -42,13 +43,15 @@ function QuoteCard({ quote, onDelete }: QuoteCardProps) {
         <span className="text-sm font-medium text-gray-900 dark:text-white">
           {formatDate(quote.fecha)}
         </span>
-        <button
-          onClick={handleDelete}
-          className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
-          aria-label="Eliminar cotización"
-        >
-          Eliminar
-        </button>
+        {canDelete && (
+          <button
+            onClick={handleDelete}
+            className="text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+            aria-label="Eliminar cotización"
+          >
+            Eliminar
+          </button>
+        )}
       </div>
 
       {/* Items summary */}
@@ -94,7 +97,7 @@ function QuoteCard({ quote, onDelete }: QuoteCardProps) {
 export function QuoteHistory() {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const { repos } = useData();
+  const { repos, userId } = useData();
   const { toast } = useToast();
   // toast.error is memoized in ToastProvider; the toast container object is not.
   const showError = toast.error;
@@ -172,7 +175,12 @@ export function QuoteHistory() {
       <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Historial de Cotizaciones</h2>
       <div>
         {quotes.map((quote) => (
-          <QuoteCard key={quote.id} quote={quote} onDelete={(id) => { void handleDelete(id); }} />
+          <QuoteCard
+            key={quote.id}
+            quote={quote}
+            onDelete={(id) => { void handleDelete(id); }}
+            canDelete={quote.ownerId === userId}
+          />
         ))}
       </div>
     </div>
