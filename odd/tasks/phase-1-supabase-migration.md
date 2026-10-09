@@ -404,7 +404,7 @@ T11–T12.
 | T8 | done | Moved the product hooks (`useProducts`/`useAddProduct`/`useUpdateProduct`/`useDeleteProduct`) onto `useData()`/`ProductsRepo` (Dexie removed); `useQuote` uses the local `DraftsRepo`; `QuoteProductSelector`, `ProductPDFDocument` (prop-only) and `PDFButton` read products from the seam; `Root` wires `DataProvider` (real Supabase repos or `VITE_E2E` fakes) around `App`; `App` drops `seedDatabase()`. Fixes T7's `R3-1` (refresh ordering) and `R3-2` (draftsRepo shape). RED: 8 T8 test files failed. GREEN: `pnpm coverage` `433 passed (433)` (47 files), coverage 78.53/69.88/81.29/76.81 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0; `pnpm exec playwright test` 18 passed. Route: delegated (planned inline). Native RDD review (lineage `review-c0c9a9500e909a38`, tier medium, 1 lens `review-reliability`) **approved**, no correction; 3 advisory findings recorded below. Commit: `e81ee73c1d0ed1ba2a8d824a66302a43718e5473`. |
 | T9 | done | `src/data/ports.ts` (`QuoteInput`/`ListSendInput`, `QuotesRepo`, `ListSendsRepo`, `ClientsRepo`; `Repositories` deliberately left `{ products }`, composed in T10); `src/data/supabase/quotesRepo.ts`/`listSendsRepo.ts` (RLS-visible `list()` + owner-scoped `listOwn()`, fecha desc; `create` `.select().single()` mapped; `remove` `.select('id')` + `assertRowAffected` → `OwnershipError`); `clientsRepo.ts` (`listNames()` = RLS-visible union of `cotizaciones` + `listas_enviadas` via `mergeClientNames`); `rows.ts` (`QuoteRow`/`QuoteInsert`, `ListSendRow`/`ListSendInsert`); `mappers.ts` (`rowToSavedQuote`, `quoteInputToInsert`, `rowToListSend`, `listSendInputToInsert`); `src/utils/clientNames.ts` (`mergeClientNames` extracted from `getClientNames`); `SavedQuote`/`QuoteDraft`/`DRAFT_KEY` moved to `src/types/quote.ts` (back-compat re-exports in `database.ts`); optional `ownerId` on `SavedQuote`/`ListSend`; `clientTracking.ts` import decoupled from Dexie; T8 `R3-1` hardened (`Array.isArray(draft.items)` guard in repo + hook; save/clear try/catch). RED: 7 suites failed. GREEN: `pnpm coverage` `479 passed (479)` (52 files), 77.5/70.6/82.11/79.2 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0. Route: delegated. Native RDD review (lineage `review-56edd248e6a7622b`, tier medium, 1 lens `review-reliability`) **approved**, no correction; 3 advisory findings recorded below. Commit: `828f90a74b7c9cb1c03fec6c84c26eefeaa003a9`. |
 | T10 | done | `src/data/ports.ts`: `Repositories` extended with `quotes`/`listSends`/`clients`; `src/data/supabase/repositories.ts` (`createSupabaseRepositories(client)`); `src/utils/exportImport.ts` `createBackupService(repos, userId)` (export/preview/apply read `listOwn(userId)`; products match own by name; quotes/list-sends merge by signature; no Dexie import); components wired via `useData()` (Cotizador save quote + client names; QuoteHistory list/remove; ClientPrices sends/quotes + names; App backup/list-send/client-name); `Root` prod branch uses `createSupabaseRepositories`; in-memory `createInMemoryQuotes/ListSends/ClientsRepo` + full `createInMemoryRepositories`; App empty-import check now includes `listSendsToAdd`. GREEN: `pnpm coverage` `491 passed (491)` (52 files), 78.74/71.16/82.71/80.54 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0; `pnpm exec playwright test` 18 passed. Route: delegated. Native RDD review (lineage `review-2be8f71097aa8abb`, tier medium, 1 lens `review-reliability`) **approved**, no correction; 3 advisory findings below. Commit: `e553efaabb2b14cd682e58ddc057d069ac779f5d`. |
-| T11 | pending | – |
+| T11 | done | `src/data/seedProducts.ts` (the 44-product `ProductInput[]` moved verbatim from `src/db/seed.ts`, no Dexie import); `src/db/` deleted entirely (`database.ts`, `seed.ts`, `__tests__/{database,listSends,quotes}.test.ts`); `src/data/DataProvider.tsx` now bootstraps `repos.products.seedIfEmpty(userId, seedProducts)` before the first `refresh()` (try/catch logs `[DataProvider] Failed to seed products` and still refreshes; `active` unmount guard); `BackupReminder` surface removed (`src/components/BackupReminder.tsx`, `src/utils/backupReminder.ts` + both tests, the `App.tsx` import/usage, and the `markBackedUp()` call in `exportImport.ts`); Dexie-era imports repointed (`src/data/testing/stub.ts` + `stub.test.ts` → `../seedProducts`; `draftsRepo.test.ts` + `clientTracking.test.ts` → `types/quote`; `ProductPDFDocument.test.tsx` drops the `dexie-react-hooks` mock); `src/test-setup.ts` drops `fake-indexeddb/auto`; `dexie`, `dexie-react-hooks`, `fake-indexeddb` removed from `package.json` (lockfile updated). GREEN: `pnpm coverage` `459 passed (459)` (47 files) [−30 from the 5 deleted Dexie-era suites, +2 new DataProvider seed tests], coverage 78.33/71.55/82.15/80.26 (60/55/60/60 held); `pnpm lint` exit 0; `pnpm exec tsc -b` exit 0; `pnpm exec playwright test` 18 passed. Residual scan clean: no `dexie`/`fake-indexeddb`/`db` imports remain in `src/`. Route: delegated. Native RDD review (lineage `review-5871e77848965fc6`, tier medium, 1 lens `review-reliability`) **approved**, no correction, authority burned; 3 advisory findings below. Commit: `e8c765dfc494e788c4b1ae91f6b000f516e61c18`. |
 | T12 | pending | – |
 | Change acceptance | pending | – |
 
@@ -820,8 +820,8 @@ work, never as a reason to re-review this candidate.
 - `R3-1` (WARNING, `src/utils/exportImport.ts:399-408`) — quote import is no longer
   atomic: the base `bulkAdd` was all-or-nothing, the new per-quote `quotes.create`
   loop persists N-1 then reports a partial `quotesAdded` on the Nth failure. The
-  mid-loop failure path is untested. **Candidate regression vs base; fix in T11 or a
-  follow-up.**
+  mid-loop failure path is untested. **Candidate regression vs base; deferred to a
+  follow-up (not fixed in T11).**
 - `R3-2` (WARNING, `src/utils/exportImport.ts:430-436`) — same non-atomic regression
   for list-send import (per-send create vs base `bulkAdd`).
 - `R3-3` (WARNING, `src/components/QuoteHistory.tsx:123`) — an admin sees every
@@ -829,6 +829,25 @@ work, never as a reason to re-review this candidate.
   `repos.quotes.remove(id)`, so a foreign row renders a delete control whose only
   outcome is the `OwnershipError` toast. **Hide/disable delete for non-own rows**
   (the design's admin view is read-only for foreign rows).
+
+### Advisory findings from the T11 review (non-blocking)
+
+- `R3-1` (WARNING, `src/data/DataProvider.tsx:40-46`) — the first load is now gated
+  behind an un-cancellable, timeout-less `seedIfEmpty`. A rejected seed is only
+  `console.error`'d (first-run user silently gets an empty catalog, no retry), and a
+  seed that never settles means `refresh()` never runs. The `active` flag only
+  suppresses post-unmount writes; it neither aborts nor bounds the seed. **Consider a
+  timeout or surfacing the seed failure in a follow-up.**
+- `R3-2` (SUGGESTION, `src/data/__tests__/DataProvider.test.tsx:290-292`) — the new
+  "seeds before the first refresh" test asserts the call and that `list` ran, but not
+  the *ordering*. An ordering assertion would prove the sequencing.
+- `R3-3` (SUGGESTION, `src/data/DataProvider.tsx:45`) — the unmount guard (return
+  before `refresh` when the seed resolves after teardown) is untested.
+
+Reviewer context note (not a located finding): the one-shot duplicate-product cleanup
+that used to live in the seed module was removed with it; name de-duplication is
+enforced by `(owner_id, nombre)` uniqueness + `seedIfEmpty`'s `ignoreDuplicates`
+upsert, which is outside this candidate's scope.
 
 Operational milestones (not authored work units):
 
@@ -840,14 +859,16 @@ Operational milestones (not authored work units):
   seed, imports their own v3 file; per-user verification above passes.
 - M4 (go-live gate): upgrade to Pro or sign off the exception (owner: Piwen).
 
-**Next step**: T11 (retire Dexie: delete `src/db/database.ts`, `src/db/seed.ts`, the
-Dexie tests, `BackupReminder` + `backupReminder.ts`; create `src/data/seedProducts.ts`;
-wire per-user `seedIfEmpty`; drop `markBackedUp()` and `fake-indexeddb`; remove the
-Dexie packages). T10 is closed — reviewed (approved) with 3 advisory findings recorded
-above (notably the `R3-1`/`R3-2` non-atomic import regression and the `R3-3` admin
-foreign-row delete affordance). Before cutover, re-run the T3 RLS probe against the
-linked dev project (Decision 14) and run the regression sweep (`pnpm lint`,
-`pnpm exec tsc -b`, `pnpm coverage`, `pnpm exec playwright test`).
+**Next step**: T12 (CI hardening + server-first docs: confirm `.github/workflows/ci.yml`
+stays credential-free, no `fake-indexeddb` reference, and rewrite `README.md` as
+server-first — setup, env, migrations, account provisioning, per-device migration
+procedure, Free→Pro gate, manual v3 recovery path). T11 is closed — reviewed (approved)
+with 3 advisory findings recorded above (notably the `R3-1` un-bounded/un-retried
+`seedIfEmpty` gate and the two test-coverage suggestions). The T10 `R3-1`/`R3-2`
+non-atomic import regression and `R3-3` admin foreign-row delete remain deferred
+follow-ups. Before cutover, re-run the T3 RLS probe against the linked dev project
+(Decision 14) and run the regression sweep (`pnpm lint`, `pnpm exec tsc -b`,
+`pnpm coverage`, `pnpm exec playwright test`).
 
 ## Delivery strategy + slice boundaries
 
