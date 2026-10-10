@@ -114,6 +114,23 @@ describe('ListSends', () => {
     expect(await screen.findByText(/no hay listas enviadas/i)).toBeInTheDocument();
   });
 
+  it('resets the retry state when the load throws synchronously', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(repos.listSends, 'list')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockImplementationOnce(() => {
+        throw new Error('synchronous boom');
+      });
+    renderWithProviders(repos);
+
+    await screen.findByText(/no se pudieron cargar las listas enviadas/i);
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+
+    // The flag must be released even though the load threw before returning a
+    // thenable, so the button returns to its idle label instead of sticking.
+    expect(await screen.findByRole('button', { name: /^reintentar$/i })).toBeEnabled();
+  });
+
   it('renders each sent list with client, date and item count', async () => {
     await Promise.all(seedListSends(repos));
     renderWithProviders(repos);

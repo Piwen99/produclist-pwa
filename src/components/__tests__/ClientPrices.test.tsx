@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ClientPrices } from '../ClientPrices';
 import { DataProvider } from '../../data/DataProvider';
 import { createInMemoryRepositories } from '../../data/testing/inMemoryRepos';
 import type { Repositories } from '../../data/ports';
+import type { ListSend } from '../../types/listSend';
 
 const USER_ID = 'user-1';
 
@@ -116,6 +117,80 @@ describe('ClientPrices', () => {
     expect(rows[0]).toHaveTextContent('Lista enviada');
     expect(rows[0]).toHaveTextContent('05/09/2026');
     expect(rows[0]).toHaveTextContent('2 ítems');
+  });
+
+  it('renders a sent list with id null using the index fallback key', async () => {
+    repos.clients.listNames = async () => ['Juan'];
+    // A degraded row can carry `null` even though the domain type is
+    // `id?: number`; both must take the index fallback branch.
+    repos.listSends.list = async () => [
+      {
+        id: null,
+        fecha: new Date(2026, 8, 5),
+        cliente: 'Juan',
+        items: [
+          { nombre: 'ALMENDRA', formato: '11,34', precioNeto: 8000, precioBruto: 9520 },
+          { nombre: 'NUEZ', formato: '5,00', precioNeto: 12000, precioBruto: 14280 },
+        ],
+      } as unknown as ListSend,
+    ];
+    repos.quotes.list = async () => [];
+
+    renderWithProvider(repos);
+
+    const heading = await screen.findByText('Historial de documentos');
+    const section = heading.closest('section') as HTMLElement;
+    const rows = within(section).getAllByRole('listitem');
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('Lista enviada');
+    expect(rows[0]).toHaveTextContent('05/09/2026');
+    expect(rows[0]).toHaveTextContent('2 ítems');
+  });
+
+  it('renders two null-id sent lists at different positions without colliding', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    repos.clients.listNames = async () => ['Juan'];
+    // Both rows would produce the key `lista-null` without the null guard.
+    repos.listSends.list = async () => [
+      {
+        id: null,
+        fecha: new Date(2026, 8, 5),
+        cliente: 'Juan',
+        items: [{ nombre: 'ALMENDRA', formato: '11,34', precioNeto: 8000, precioBruto: 9520 }],
+      } as unknown as ListSend,
+      {
+        id: null,
+        fecha: new Date(2026, 8, 10),
+        cliente: 'Juan',
+        items: [
+          { nombre: 'NUEZ', formato: '5,00', precioNeto: 12000, precioBruto: 14280 },
+          { nombre: 'PISTACHO', formato: '1,00', precioNeto: 20000, precioBruto: 23800 },
+        ],
+      } as unknown as ListSend,
+    ];
+    repos.quotes.list = async () => [];
+
+    renderWithProvider(repos);
+
+    const heading = await screen.findByText('Historial de documentos');
+    const section = heading.closest('section') as HTMLElement;
+    const rows = within(section).getAllByRole('listitem');
+
+    // Both null-id rows must render; a duplicated `lista-null` key makes React
+    // warn and reconcile one of them away.
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('10/09/2026');
+    expect(rows[0]).toHaveTextContent('2 ítems');
+    expect(rows[1]).toHaveTextContent('05/09/2026');
+    expect(rows[1]).toHaveTextContent('1 ítem');
+
+    const duplicateKeyWarning = errorSpy.mock.calls.some((call) =>
+      call.some((arg) => typeof arg === 'string' && arg.includes('same key')),
+    );
+    expect(duplicateKeyWarning).toBe(false);
+
+    errorSpy.mockRestore();
   });
 
   it('updates the document history and price table when the selected client changes', async () => {

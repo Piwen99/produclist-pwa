@@ -23,22 +23,37 @@ interface ClientDocument {
 }
 
 /**
+ * Stable list key for a document: prefer the persisted id and fall back to the
+ * array index when it is missing. The id is widened to `number | undefined |
+ * null` so a `null` id (which the domain type does not model, but a degraded
+ * row can still carry) takes the same index-based fallback as `undefined`;
+ * otherwise every null-id row would share the key `lista-null` / `cotizacion-null`
+ * and collide.
+ */
+function documentKey(
+  kind: 'lista' | 'cotizacion',
+  id: number | undefined | null,
+  index: number,
+): string {
+  return id === undefined || id === null
+    ? `${kind}-x${String(index)}`
+    : `${kind}-${String(id)}`;
+}
+
+/**
  * Merge a client's sent lists and quotes into a single newest-first document
  * list. Sent lists have no stored total, so only quotes carry one.
  */
 function buildClientDocuments(sends: ListSend[], quotes: SavedQuote[]): ClientDocument[] {
   const documents: ClientDocument[] = [
     ...sends.map((send, index) => ({
-      key: send.id !== undefined ? `lista-${String(send.id)}` : `lista-x${String(index)}`,
+      key: documentKey('lista', send.id, index),
       kind: 'lista' as const,
       fecha: send.fecha,
       itemCount: send.items.length,
     })),
     ...quotes.map((quote, index) => ({
-      key:
-        quote.id !== undefined
-          ? `cotizacion-${String(quote.id)}`
-          : `cotizacion-x${String(index)}`,
+      key: documentKey('cotizacion', quote.id, index),
       kind: 'cotizacion' as const,
       fecha: quote.fecha,
       itemCount: quote.items.length,
