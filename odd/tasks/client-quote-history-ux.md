@@ -156,8 +156,19 @@ Overall: every task green; coverage holds 60/55/60/60; `verify` + `e2e` green.
 
 ## Progress / verification evidence / next step
 
-Not started. Next step: approve this document, then implement T1 as a bounded,
-reviewed work unit (RDD review per candidate), then T2, then T3.
+- **T1 — done.** Commit `79fb19e` on `feat/quote-history-client-search` (PR #58).
+  `QuoteHistory` now shows `cliente` (fallback "Sin cliente"), adds a client search
+  (input + clear + result counter + Ctrl+/ + "sin resultados" state), and collapses
+  each quote into a summary row that expands to the item/totals detail; delete stays
+  in the summary row with its ownership guard. Checks: `tsc -b` 0, `lint` 0,
+  `coverage` 0 (thresholds 60/55/60/60 held), `QuoteHistory` suite 17/17. Native RDD
+  review lineage `review-db9a1845f55f1b8f` (medium, 1 lens `review-reliability`)
+  approved; authority burned. Non-blocking advisories: `R3-1` (WARNING, no-quotes
+  empty boundary unproved), `R3-2` (SUGGESTION, search matches raw `cliente` vs the
+  displayed normalized label), `R3-3` (SUGGESTION, `aria-controls` references an
+  unmounted id while collapsed).
+
+Next step: **T2** — global sent-lists screen (`/listas`) + header nav entry.
 
 ## Delivery strategy + slice boundaries
 
