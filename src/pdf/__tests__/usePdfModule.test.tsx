@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor, act } from '@testing-library/react';
 import { usePdfModule } from '../usePdfModule';
 import {
   isChunkLoadError,
@@ -35,9 +35,11 @@ describe('usePdfModule', () => {
     mockedClearStaleAssets.mockResolvedValue(undefined);
     mockedIsChunkLoadError.mockReturnValue(false);
     mockedHasAttemptedRecovery.mockReturnValue(false);
+    mockedMarkRecoveryAttempted.mockReturnValue(true);
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     consoleError.mockRestore();
   });
 
@@ -84,5 +86,58 @@ describe('usePdfModule', () => {
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(mockedReloadPage).not.toHaveBeenCalled();
     expect(mockedMarkRecoveryAttempted).not.toHaveBeenCalled();
+  });
+
+  it('does not reload and settles on error when the recovery guard cannot persist', async () => {
+    mockedIsChunkLoadError.mockReturnValue(true);
+    mockedHasAttemptedRecovery.mockReturnValue(false);
+    mockedMarkRecoveryAttempted.mockReturnValue(false);
+    const load = () => Promise.reject(new Error('chunk'));
+
+    const { result } = renderHook(() => usePdfModule(load));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(mockedReloadPage).not.toHaveBeenCalled();
+    expect(mockedClearStaleAssets).not.toHaveBeenCalled();
+  });
+
+  it('clears stale assets and reloads on manual retry', async () => {
+    const load = () => Promise.resolve({ ok: true });
+
+    const { result } = renderHook(() => usePdfModule(load));
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+
+    await act(async () => {
+      result.current.reload();
+    });
+
+    expect(mockedClearStaleAssets).toHaveBeenCalledTimes(1);
+    expect(mockedReloadPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to error when the reload does not navigate', async () => {
+    vi.useFakeTimers();
+    mockedIsChunkLoadError.mockReturnValue(true);
+    mockedHasAttemptedRecovery.mockReturnValue(false);
+    mockedMarkRecoveryAttempted.mockReturnValue(true);
+    mockedClearStaleAssets.mockResolvedValue(undefined);
+    const load = () => Promise.reject(new Error('chunk'));
+
+    const { result } = renderHook(() => usePdfModule(load));
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(result.current.status).toBe('loading');
+
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(result.current.status).toBe('error');
+    expect(mockedReloadPage).toHaveBeenCalledTimes(1);
   });
 });

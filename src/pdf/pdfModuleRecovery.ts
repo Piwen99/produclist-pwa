@@ -46,13 +46,20 @@ export function hasAttemptedRecovery(): boolean {
   }
 }
 
-/** Records that a recovery attempt was already made this session. */
-export function markRecoveryAttempted(): void {
+/**
+ * Records that a recovery attempt was already made this session. Returns
+ * `true` when the guard persisted and `false` when storage is unavailable.
+ * On `false` the caller MUST NOT auto-reload, otherwise a persistent failure
+ * (private mode, blocked cookies) would become an unbounded reload loop.
+ */
+export function markRecoveryAttempted(): boolean {
   try {
     window.sessionStorage.setItem(RECOVERY_GUARD_KEY, '1');
+    return true;
   } catch {
     // Storage can be unavailable (private mode, blocked cookies); the guard
     // simply degrades to "not attempted".
+    return false;
   }
 }
 

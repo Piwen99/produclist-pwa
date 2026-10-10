@@ -19,6 +19,14 @@ import App from './App';
  */
 interface Wiring {
   auth: AuthPort;
+  /**
+   * Builds the repository set for the authenticated user.
+   *
+   * The `userId` argument is consumed asymmetrically. The e2e stub scopes all
+   * data by `userId`; the Supabase adapters ignore it and scope by RLS
+   * (`auth.uid()`) instead. The parameter stays on the contract so both wiring
+   * modes share one factory shape.
+   */
   createRepositories: (userId: string) => Repositories;
 }
 
