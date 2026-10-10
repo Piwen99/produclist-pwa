@@ -29,13 +29,16 @@ interface ClientDocument {
 function buildClientDocuments(sends: ListSend[], quotes: SavedQuote[]): ClientDocument[] {
   const documents: ClientDocument[] = [
     ...sends.map((send, index) => ({
-      key: `lista-${String(send.id ?? index)}`,
+      key: send.id !== undefined ? `lista-${String(send.id)}` : `lista-x${String(index)}`,
       kind: 'lista' as const,
       fecha: send.fecha,
       itemCount: send.items.length,
     })),
     ...quotes.map((quote, index) => ({
-      key: `cotizacion-${String(quote.id ?? index)}`,
+      key:
+        quote.id !== undefined
+          ? `cotizacion-${String(quote.id)}`
+          : `cotizacion-x${String(index)}`,
       kind: 'cotizacion' as const,
       fecha: quote.fecha,
       itemCount: quote.items.length,

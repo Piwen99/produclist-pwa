@@ -21,6 +21,7 @@ export function ListSends() {
   const [listSends, setListSends] = useState<ListSend[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const { repos } = useData();
@@ -29,7 +30,7 @@ export function ListSends() {
   const showError = toast.error;
 
   const loadListSends = useCallback(() => {
-    repos.listSends
+    return repos.listSends
       .list()
       .then((data) => {
         setListSends(data);
@@ -46,8 +47,17 @@ export function ListSends() {
   }, [repos, showError]);
 
   useEffect(() => {
-    loadListSends();
+    void loadListSends();
   }, [loadListSends]);
+
+  // Guard retriggers: the button is disabled while a retry is in flight, so an
+  // extra click cannot start an overlapping load.
+  const handleRetry = () => {
+    setIsRetrying(true);
+    void loadListSends().finally(() => {
+      setIsRetrying(false);
+    });
+  };
 
   // Keyboard shortcut: Ctrl+/ or Cmd+/ to focus search
   useEffect(() => {
@@ -108,10 +118,11 @@ export function ListSends() {
             Revisá tu conexión e intentá de nuevo.
           </p>
           <button
-            onClick={loadListSends}
-            className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors touch-manipulation"
+            onClick={handleRetry}
+            disabled={isRetrying}
+            className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            Reintentar
+            {isRetrying ? 'Reintentando…' : 'Reintentar'}
           </button>
         </div>
       </div>

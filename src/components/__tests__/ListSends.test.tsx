@@ -7,6 +7,7 @@ import { ToastProvider } from '../../hooks/ToastProvider';
 import { DataProvider } from '../../data/DataProvider';
 import { createInMemoryRepositories } from '../../data/testing/inMemoryRepos';
 import type { Repositories } from '../../data/ports';
+import type { ListSend } from '../../types/listSend';
 
 const USER_ID = 'user-1';
 
@@ -79,10 +80,38 @@ describe('ListSends', () => {
     renderWithProviders(repos);
 
     await screen.findByText(/no se pudieron cargar las listas enviadas/i);
+    const callsBefore = listSpy.mock.calls.length;
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
 
     expect(await screen.findByText('Juan Pérez')).toBeInTheDocument();
-    expect(listSpy).toHaveBeenCalledTimes(2);
+    expect(listSpy.mock.calls.length).toBe(callsBefore + 1);
+  });
+
+  it('does not start a second load while a retry is in flight', async () => {
+    const user = userEvent.setup();
+    let resolveList!: (rows: ListSend[]) => void;
+    const pending = new Promise<ListSend[]>((resolve) => {
+      resolveList = resolve;
+    });
+    const listSpy = vi
+      .spyOn(repos.listSends, 'list')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockReturnValueOnce(pending);
+    renderWithProviders(repos);
+
+    await screen.findByText(/no se pudieron cargar las listas enviadas/i);
+    const callsBefore = listSpy.mock.calls.length;
+
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+
+    const retryButton = screen.getByRole('button', { name: /reintentando/i });
+    expect(retryButton).toBeDisabled();
+
+    fireEvent.click(retryButton);
+    expect(listSpy.mock.calls.length).toBe(callsBefore + 1);
+
+    resolveList([]);
+    expect(await screen.findByText(/no hay listas enviadas/i)).toBeInTheDocument();
   });
 
   it('renders each sent list with client, date and item count', async () => {
