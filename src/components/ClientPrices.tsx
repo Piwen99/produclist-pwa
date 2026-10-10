@@ -2,12 +2,47 @@ import { useEffect, useState } from 'react';
 import { useData } from '../data/useData';
 import { buildClientPriceHistory, type ClientPriceEntry } from '../utils/clientTracking';
 import { formatCurrency } from '../utils/price';
+import type { ListSend } from '../types/listSend';
+import type { SavedQuote } from '../types/quote';
 
 function formatDate(date: Date): string {
   const d = String(date.getDate()).padStart(2, '0');
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const y = String(date.getFullYear());
   return `${d}/${m}/${y}`;
+}
+
+/** A saved document shown in the per-client history, merged across both kinds. */
+interface ClientDocument {
+  key: string;
+  kind: 'lista' | 'cotizacion';
+  fecha: Date;
+  itemCount: number;
+  /** Only quotes store a total; sent lists carry per-kg prices, no quantity. */
+  total?: number;
+}
+
+/**
+ * Merge a client's sent lists and quotes into a single newest-first document
+ * list. Sent lists have no stored total, so only quotes carry one.
+ */
+function buildClientDocuments(sends: ListSend[], quotes: SavedQuote[]): ClientDocument[] {
+  const documents: ClientDocument[] = [
+    ...sends.map((send, index) => ({
+      key: `lista-${String(send.id ?? index)}`,
+      kind: 'lista' as const,
+      fecha: send.fecha,
+      itemCount: send.items.length,
+    })),
+    ...quotes.map((quote, index) => ({
+      key: `cotizacion-${String(quote.id ?? index)}`,
+      kind: 'cotizacion' as const,
+      fecha: quote.fecha,
+      itemCount: quote.items.length,
+      total: quote.total,
+    })),
+  ];
+  return documents.sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
 }
 
 /**
@@ -18,6 +53,7 @@ export function ClientPrices() {
   const [clients, setClients] = useState<string[]>([]);
   const [selected, setSelected] = useState('');
   const [entries, setEntries] = useState<ClientPriceEntry[]>([]);
+  const [documents, setDocuments] = useState<ClientDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const { repos } = useData();
 
@@ -37,6 +73,7 @@ export function ClientPrices() {
     const load = async () => {
       if (!selected) {
         setEntries([]);
+        setDocuments([]);
         setLoading(false);
         return;
       }
@@ -50,12 +87,12 @@ export function ClientPrices() {
       ]);
 
       if (!cancelled) {
-        setEntries(
-          buildClientPriceHistory(
-            sends.filter((send) => send.cliente.trim().toLowerCase() === key),
-            quotes.filter((quote) => quote.cliente?.trim().toLowerCase() === key)
-          )
+        const clientSends = sends.filter((send) => send.cliente.trim().toLowerCase() === key);
+        const clientQuotes = quotes.filter(
+          (quote) => quote.cliente?.trim().toLowerCase() === key
         );
+        setEntries(buildClientPriceHistory(clientSends, clientQuotes));
+        setDocuments(buildClientDocuments(clientSends, clientQuotes));
         setLoading(false);
       }
     };
@@ -102,30 +139,74 @@ export function ClientPrices() {
 
       {loading ? (
         <p className="text-gray-500 dark:text-gray-400 text-sm">Cargando…</p>
-      ) : entries.length === 0 ? (
-        <p className="text-gray-500 dark:text-gray-400 text-sm">
-          No hay precios registrados para este cliente.
-        </p>
       ) : (
-        <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-          {entries.map((entry) => (
-            <li key={entry.nombre} className="py-3 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                  {entry.nombre}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {entry.formato} kg ·{' '}
-                  {entry.fuente === 'lista' ? 'Lista enviada' : 'Cotización'} ·{' '}
-                  {formatDate(entry.fecha)}
-                </p>
-              </div>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap">
-                {formatCurrency(entry.precioNeto)}
+        <div className="flex flex-col gap-6 overflow-y-auto">
+          <section>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              Historial de documentos
+            </h3>
+            {documents.length === 0 ? (
+              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                Sin documentos para este cliente.
               </p>
-            </li>
-          ))}
-        </ul>
+            ) : (
+              <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                {documents.map((doc) => (
+                  <li
+                    key={doc.key}
+                    className="py-3 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {doc.kind === 'lista' ? 'Lista enviada' : 'Cotización'}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {formatDate(doc.fecha)} · {doc.itemCount}{' '}
+                        {doc.itemCount === 1 ? 'ítem' : 'ítems'}
+                      </p>
+                    </div>
+                    {doc.total !== undefined && (
+                      <p className="text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap">
+                        {formatCurrency(doc.total)}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
+              Últimos precios por producto
+            </h3>
+            {entries.length === 0 ? (
+              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                No hay precios registrados para este cliente.
+              </p>
+            ) : (
+              <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                {entries.map((entry) => (
+                  <li key={entry.nombre} className="py-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                        {entry.nombre}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {entry.formato} kg ·{' '}
+                        {entry.fuente === 'lista' ? 'Lista enviada' : 'Cotización'} ·{' '}
+                        {formatDate(entry.fecha)}
+                      </p>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap">
+                      {formatCurrency(entry.precioNeto)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
       )}
     </div>
   );
