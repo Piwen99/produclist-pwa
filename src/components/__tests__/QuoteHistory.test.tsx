@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QuoteHistory } from '../QuoteHistory';
 import { ToastProvider } from '../../hooks/ToastProvider';
@@ -20,6 +20,7 @@ const USER_ID = 'user-1';
 const mockQuotes: Omit<SavedQuote, 'id' | 'ownerId'>[] = [
   {
     fecha: new Date('2024-01-15T10:30:00'),
+    cliente: 'Distribuidora Los Andes',
     items: [
       { id: 'item-1', productId: 1, nombre: 'ALMENDRA LAMINADA', formato: '11,34', cantidad: 2, precioKg: 9200 },
     ],
@@ -111,11 +112,33 @@ describe('QuoteHistory', () => {
       expect(screen.getByText(/\$35\.403/)).toBeInTheDocument();
     });
 
-    it('should show item names for each quote', async () => {
+    it('should show the client name without any click', async () => {
       await seedQuotes(repos, mockQuotes);
       renderWithProviders(repos);
 
-      expect(await screen.findByText(/ALMENDRA LAMINADA/i)).toBeInTheDocument();
+      expect(await screen.findByText('Distribuidora Los Andes')).toBeInTheDocument();
+    });
+
+    it('should show "Sin cliente" when a quote has no client', async () => {
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
+
+      expect(await screen.findByText('Sin cliente')).toBeInTheDocument();
+    });
+
+    it('should show item names for each quote when expanded', async () => {
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
+
+      await screen.findByText(/15 de enero de 2024/i);
+
+      // Rows start collapsed: item detail is not present until expanded.
+      expect(screen.queryByText(/ALMENDRA LAMINADA/i)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /Distribuidora Los Andes/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Sin cliente/i }));
+
+      expect(screen.getByText(/ALMENDRA LAMINADA/i)).toBeInTheDocument();
       expect(screen.getByText(/Chía/i)).toBeInTheDocument();
       expect(screen.getByText(/Avéna/i)).toBeInTheDocument();
     });
@@ -149,6 +172,101 @@ describe('QuoteHistory', () => {
     });
   });
 
+  describe('client search', () => {
+    it('filters by client and updates the result counter', async () => {
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
+
+      await screen.findByText('Distribuidora Los Andes');
+      expect(screen.getByText(/2 cotizaciones/i)).toBeInTheDocument();
+
+      const input = screen.getByRole('textbox', { name: /buscar cotizaciones por cliente/i });
+      fireEvent.change(input, { target: { value: 'andes' } });
+
+      expect(screen.getByText('1 de 2')).toBeInTheDocument();
+      expect(screen.getByText('Distribuidora Los Andes')).toBeInTheDocument();
+      expect(screen.queryByText('Sin cliente')).not.toBeInTheDocument();
+    });
+
+    it('shows the "sin resultados" state when nothing matches', async () => {
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
+
+      await screen.findByText('Distribuidora Los Andes');
+
+      const input = screen.getByRole('textbox', { name: /buscar cotizaciones por cliente/i });
+      fireEvent.change(input, { target: { value: 'zzz' } });
+
+      expect(screen.getByText(/sin resultados/i)).toBeInTheDocument();
+      expect(screen.getByText('0 de 2')).toBeInTheDocument();
+      expect(screen.queryByTestId('quote-card-1')).not.toBeInTheDocument();
+    });
+
+    it('clears the search with the clear button', async () => {
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
+
+      await screen.findByText('Distribuidora Los Andes');
+
+      const input = screen.getByRole('textbox', { name: /buscar cotizaciones por cliente/i });
+      fireEvent.change(input, { target: { value: 'zzz' } });
+      expect(screen.getByText(/sin resultados/i)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /limpiar búsqueda/i }));
+
+      expect(screen.getByText('Sin cliente')).toBeInTheDocument();
+      expect(input).toHaveValue('');
+    });
+
+    it('focuses the search input with Ctrl+/', async () => {
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
+
+      const input = await screen.findByRole('textbox', { name: /buscar cotizaciones por cliente/i });
+      expect(input).not.toHaveFocus();
+
+      fireEvent.keyDown(window, { key: '/', ctrlKey: true });
+
+      expect(input).toHaveFocus();
+    });
+  });
+
+  describe('expandable rows', () => {
+    it('reveals item detail on expand and hides it on collapse', async () => {
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
+
+      const toggle = await screen.findByRole('button', { name: /Distribuidora Los Andes/i });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByText(/ALMENDRA LAMINADA/i)).not.toBeInTheDocument();
+
+      fireEvent.click(toggle);
+
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText(/ALMENDRA LAMINADA/i)).toBeInTheDocument();
+      expect(screen.getByText(/Total Neto/i)).toBeInTheDocument();
+      expect(screen.getByText(/IVA 19%/i)).toBeInTheDocument();
+
+      fireEvent.click(toggle);
+
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByText(/ALMENDRA LAMINADA/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Total Neto/i)).not.toBeInTheDocument();
+    });
+
+    it('links the toggle to its detail container via aria-controls', async () => {
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
+
+      const toggle = await screen.findByRole('button', { name: /Distribuidora Los Andes/i });
+      const detailId = toggle.getAttribute('aria-controls');
+      expect(detailId).toBeTruthy();
+
+      fireEvent.click(toggle);
+      expect(document.getElementById(detailId as string)).toBeInTheDocument();
+    });
+  });
+
   describe('admin view', () => {
     it('hides delete for foreign quotes while keeping it for own quotes', async () => {
       const principal: Principal = { userId: USER_ID, isAdmin: true };
@@ -169,14 +287,12 @@ describe('QuoteHistory', () => {
       expect(await screen.findByText(/15 de enero de 2024/i)).toBeInTheDocument();
       expect(screen.getByText(/10 de enero de 2024/i)).toBeInTheDocument();
 
-      const deleteButtons = screen.getAllByRole('button', { name: /eliminar/i });
-      expect(deleteButtons).toHaveLength(1);
-      expect(
-        screen.getByText(/15 de enero de 2024/i).closest('div')
-      ).toContainElement(deleteButtons[0]);
-      expect(
-        screen.getByText(/10 de enero de 2024/i).closest('div')
-      ).not.toContainElement(deleteButtons[0]);
+      const ownCard = screen.getByTestId('quote-card-1');
+      const foreignCard = screen.getByTestId('quote-card-2');
+
+      expect(within(ownCard).getByRole('button', { name: /eliminar cotización/i })).toBeInTheDocument();
+      expect(within(foreignCard).queryByRole('button', { name: /eliminar cotización/i })).not.toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /eliminar cotización/i })).toHaveLength(1);
     });
   });
 });
