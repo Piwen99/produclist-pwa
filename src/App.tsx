@@ -13,6 +13,7 @@ import { InstallPrompt } from './components/InstallPrompt';
 import { Cotizador } from './components/Cotizador';
 import { QuoteHistory } from './components/QuoteHistory';
 import { ClientPrices } from './components/ClientPrices';
+import { ListSends } from './components/ListSends';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { ListSendForm } from './components/ListSendForm';
 import { createBackupService, type ImportPreview } from './utils/exportImport';
@@ -332,13 +333,26 @@ function App() {
                   Historial
                 </NavLink>
                 <NavLink
+                  to="/listas"
+                  className={({ isActive }) =>
+                    `shrink-0 px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                      isActive
+                        ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`
+                  }
+                >
+                  Listas
+                </NavLink>
+                <NavLink
                   to="/clientes"
                   className={({ isActive }) =>
                     `shrink-0 px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
                       isActive
                         ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    }`}
+                    }`
+                  }
                 >
                   Clientes
                 </NavLink>
@@ -391,6 +405,7 @@ function App() {
           } />
           <Route path="historial" element={<QuoteHistory />} />
           <Route path="clientes" element={<ClientPrices />} />
+          <Route path="listas" element={<ListSends />} />
         </Routes>
       </main>
 
