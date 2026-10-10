@@ -32,6 +32,7 @@ describe('usePdfModule', () => {
   beforeEach(() => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.clearAllMocks();
+    mockedReloadPage.mockReset();
     mockedClearStaleAssets.mockResolvedValue(undefined);
     mockedIsChunkLoadError.mockReturnValue(false);
     mockedHasAttemptedRecovery.mockReturnValue(false);
@@ -88,7 +89,7 @@ describe('usePdfModule', () => {
     expect(mockedMarkRecoveryAttempted).not.toHaveBeenCalled();
   });
 
-  it('does not reload and settles on error when the recovery guard cannot persist', async () => {
+  it('recovers in place without reloading when the recovery guard cannot persist', async () => {
     mockedIsChunkLoadError.mockReturnValue(true);
     mockedHasAttemptedRecovery.mockReturnValue(false);
     mockedMarkRecoveryAttempted.mockReturnValue(false);
@@ -98,7 +99,43 @@ describe('usePdfModule', () => {
 
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(mockedReloadPage).not.toHaveBeenCalled();
-    expect(mockedClearStaleAssets).not.toHaveBeenCalled();
+    expect(mockedClearStaleAssets).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles on ready after an in-place retry when the guard cannot persist', async () => {
+    mockedIsChunkLoadError.mockReturnValue(true);
+    mockedHasAttemptedRecovery.mockReturnValue(false);
+    mockedMarkRecoveryAttempted.mockReturnValue(false);
+    const load = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('chunk'))
+      .mockResolvedValueOnce({ ok: true });
+
+    const { result } = renderHook(() => usePdfModule(load));
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(result.current.module).toEqual({ ok: true });
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(mockedReloadPage).not.toHaveBeenCalled();
+    expect(mockedClearStaleAssets).toHaveBeenCalledTimes(1);
+  });
+
+  it('settles on error and logs when the reload throws', async () => {
+    mockedIsChunkLoadError.mockReturnValue(true);
+    mockedHasAttemptedRecovery.mockReturnValue(false);
+    mockedMarkRecoveryAttempted.mockReturnValue(true);
+    mockedReloadPage.mockImplementation(() => {
+      throw new Error('reload blocked');
+    });
+    const load = () => Promise.reject(new Error('chunk'));
+
+    const { result } = renderHook(() => usePdfModule(load));
+
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(consoleError).toHaveBeenCalledWith(
+      'Failed to reload after PDF chunk error:',
+      expect.any(Error),
+    );
   });
 
   it('clears stale assets and reloads on manual retry', async () => {
