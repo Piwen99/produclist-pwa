@@ -1,6 +1,7 @@
 import { useMemo, useState, useRef, useEffect } from 'react';
 import type { Product, ProductInput, Category } from '../types/product';
 import { CategoryGroup } from './CategoryGroup';
+import { PDFButton } from './PDFButton';
 
 interface ProductListProps {
   products: Product[] | undefined;
@@ -307,6 +308,9 @@ export function ProductList({ products, onUpdate, onDelete, onStartEdit }: Produ
           </button>
         </div>
       )}
+
+      {/* Floating PDF button — scoped to the product list screen */}
+      <PDFButton />
     </div>
   );
 }
