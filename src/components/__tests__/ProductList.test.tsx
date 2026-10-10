@@ -4,6 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { ProductList } from '../ProductList';
 import type { Product } from '../../types/product';
 
+vi.mock('../PDFButton', () => ({
+  PDFButton: () => <button type="button">Generar PDF</button>,
+}));
+
 const mockProducts: Product[] = [
   { id: 1, nombre: 'Chía', categoria: 'Semillas/Cereal', formato: '11,34', precioNeto: 9200, disponible: true },
   { id: 2, nombre: 'Almendras', categoria: 'Frutos Secos', formato: '1', precioNeto: 15000, disponible: false },
@@ -230,5 +234,22 @@ describe('ProductList — keyboard shortcut', () => {
 
     fireEvent.keyDown(window, { key: '/', metaKey: true });
     expect(screen.getByLabelText('Buscar productos por nombre')).toHaveFocus();
+  });
+});
+
+describe('ProductList — PDF button scope', () => {
+  it('renders the PDF button when products exist', () => {
+    renderList(mockProducts);
+    expect(screen.getByRole('button', { name: /generar pdf/i })).toBeInTheDocument();
+  });
+
+  it('does not render the PDF button for an empty catalog', () => {
+    renderList([]);
+    expect(screen.queryByRole('button', { name: /generar pdf/i })).not.toBeInTheDocument();
+  });
+
+  it('does not render the PDF button while loading', () => {
+    renderList(undefined);
+    expect(screen.queryByRole('button', { name: /generar pdf/i })).not.toBeInTheDocument();
   });
 });

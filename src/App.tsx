@@ -9,7 +9,6 @@ import { useToast } from './hooks/useToast';
 import { useAuth } from './auth/useAuth';
 import { ProductList } from './components/ProductList';
 import { ProductForm } from './components/ProductForm';
-import { PDFButton } from './components/PDFButton';
 import { InstallPrompt } from './components/InstallPrompt';
 import { Cotizador } from './components/Cotizador';
 import { QuoteHistory } from './components/QuoteHistory';
@@ -394,9 +393,6 @@ function App() {
           <Route path="clientes" element={<ClientPrices />} />
         </Routes>
       </main>
-
-      {/* Floating PDF Button */}
-      <PDFButton disabled={!hasProducts} />
 
       {/* PWA Install Prompt */}
       <InstallPrompt />
