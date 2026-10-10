@@ -172,7 +172,26 @@ Overall: every task green; coverage holds 60/55/60/60; `verify` + `e2e` green.
   `aria-controls` on the expanded state. Follow-up review lineage
   `review-9e425d8fe0e846d0` (medium, 1 lens) approved with no findings; authority burned.
 
-Next step: **T2** — global sent-lists screen (`/listas`) + header nav entry.
+- **T2 — done.** Branch `feat/list-sends-screen` (commit `94001f3` + follow-up `cce2627`),
+  PR #59. New `/listas` route + "Listas" header tab listing all saved sent lists
+  (date · client · N ítems) with a client search (counter, Ctrl+/, clear, distinct
+  empty vs "Sin resultados"). Checks: `tsc -b` 0, `lint` 0, `coverage` 0. Native RDD
+  review lineage `review-0dc53529a7918f7d` (medium, 1 lens) approved; authority burned.
+  Advisories: `R3-1` (WARNING, a load error rendered as the empty state), `R3-2` (WARNING,
+  ordering test unproved), `R3-3` (SUGGESTION). **Follow-up (same PR):** distinct load-error
+  state with retry, and seeded the older send first so the ordering test proves
+  newest-first. Follow-up review lineage `review-ac399f95b696bdd9` (medium, 1 lens)
+  approved; authority burned. Remaining advisories: retry test call-count brittleness
+  (SUGGESTION), no in-flight guard on retry (SUGGESTION).
+- **T3 — done.** Branch `feat/client-prices-history` (this PR). `ClientPrices` now shows a
+  per-client "Historial de documentos" (sent lists + quotes, newest first, kind + date +
+  item count + quote total) alongside the "Últimos precios por producto" table. Checks:
+  `tsc -b` 0, `lint` 0, `coverage` 0. Native RDD review lineage `review-f928a0d64e8cef1b`
+  (medium, 1 lens) approved; authority burned. Non-blocking advisories: `R3-A` (WARNING,
+  the document key fallback can collide with a real id), `R3-B` (SUGGESTION, id-absent
+  boundary untested).
+
+Next step: feature complete (T1–T3). Optional follow-ups: T3 `R3-A`/`R3-B` and T2 `R3-3`.
 
 ## Delivery strategy + slice boundaries
 
