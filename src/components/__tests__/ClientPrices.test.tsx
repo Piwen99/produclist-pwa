@@ -91,6 +91,33 @@ describe('ClientPrices', () => {
     expect(rows[1]).not.toHaveTextContent('$');
   });
 
+  it('renders a document row for a sent list with no id using a fallback key', async () => {
+    repos.clients.listNames = async () => ['Juan'];
+    // A persisted row must carry an id, but guard the fallback branch anyway.
+    repos.listSends.list = async () => [
+      {
+        fecha: new Date(2026, 8, 5),
+        cliente: 'Juan',
+        items: [
+          { nombre: 'ALMENDRA', formato: '11,34', precioNeto: 8000, precioBruto: 9520 },
+          { nombre: 'NUEZ', formato: '5,00', precioNeto: 12000, precioBruto: 14280 },
+        ],
+      },
+    ];
+    repos.quotes.list = async () => [];
+
+    renderWithProvider(repos);
+
+    const heading = await screen.findByText('Historial de documentos');
+    const section = heading.closest('section') as HTMLElement;
+    const rows = within(section).getAllByRole('listitem');
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('Lista enviada');
+    expect(rows[0]).toHaveTextContent('05/09/2026');
+    expect(rows[0]).toHaveTextContent('2 ítems');
+  });
+
   it('updates the document history and price table when the selected client changes', async () => {
     await repos.listSends.create({
       cliente: 'Juan',
