@@ -85,6 +85,13 @@ describe('QuoteHistory', () => {
       const link = await screen.findByRole('link', { name: /ir al cotizador/i });
       expect(link).toHaveAttribute('href', '/cotizador');
     });
+
+    it('should show the empty state and not the "sin resultados" panel for an empty repository', async () => {
+      renderWithProviders(repos);
+
+      expect(await screen.findByText(/no hay cotizaciones guardadas/i)).toBeInTheDocument();
+      expect(screen.queryByText(/sin resultados/i)).not.toBeInTheDocument();
+    });
   });
 
   describe('with quotes', () => {
@@ -188,6 +195,20 @@ describe('QuoteHistory', () => {
       expect(screen.queryByText('Sin cliente')).not.toBeInTheDocument();
     });
 
+    it('matches quotes without a client when typing "sin cliente"', async () => {
+      await seedQuotes(repos, mockQuotes);
+      renderWithProviders(repos);
+
+      await screen.findByText('Distribuidora Los Andes');
+
+      const input = screen.getByRole('textbox', { name: /buscar cotizaciones por cliente/i });
+      fireEvent.change(input, { target: { value: 'sin cliente' } });
+
+      expect(screen.getByText('1 de 2')).toBeInTheDocument();
+      expect(screen.getByText('Sin cliente')).toBeInTheDocument();
+      expect(screen.queryByText('Distribuidora Los Andes')).not.toBeInTheDocument();
+    });
+
     it('shows the "sin resultados" state when nothing matches', async () => {
       await seedQuotes(repos, mockQuotes);
       renderWithProviders(repos);
@@ -254,15 +275,22 @@ describe('QuoteHistory', () => {
       expect(screen.queryByText(/Total Neto/i)).not.toBeInTheDocument();
     });
 
-    it('links the toggle to its detail container via aria-controls', async () => {
+    it('links the toggle to its detail container via aria-controls only while expanded', async () => {
       await seedQuotes(repos, mockQuotes);
       renderWithProviders(repos);
 
       const toggle = await screen.findByRole('button', { name: /Distribuidora Los Andes/i });
-      const detailId = toggle.getAttribute('aria-controls');
-      expect(detailId).toBeTruthy();
+
+      // Collapsed by default: the detail container is not mounted, so the
+      // toggle must not reference a missing id.
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      expect(toggle).not.toHaveAttribute('aria-controls');
 
       fireEvent.click(toggle);
+
+      const detailId = toggle.getAttribute('aria-controls');
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(detailId).toBeTruthy();
       expect(document.getElementById(detailId as string)).toBeInTheDocument();
     });
   });

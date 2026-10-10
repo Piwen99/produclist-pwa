@@ -56,7 +56,7 @@ function QuoteCard({ quote, onDelete, canDelete }: QuoteCardProps) {
           type="button"
           onClick={() => setIsExpanded((prev) => !prev)}
           aria-expanded={isExpanded}
-          aria-controls={detailId}
+          aria-controls={isExpanded ? detailId : undefined}
           className="flex-1 min-w-0 flex items-center justify-between gap-2 text-left touch-manipulation"
         >
           <span className="min-w-0">
@@ -186,7 +186,7 @@ export function QuoteHistory() {
     const term = searchTerm.trim();
     if (!term) return quotes;
     const lower = term.toLowerCase();
-    return quotes.filter((quote) => (quote.cliente ?? '').toLowerCase().includes(lower));
+    return quotes.filter((quote) => clientName(quote).toLowerCase().includes(lower));
   }, [quotes, searchTerm]);
 
   const totalCount = quotes.length;

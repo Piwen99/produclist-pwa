@@ -167,6 +167,10 @@ Overall: every task green; coverage holds 60/55/60/60; `verify` + `e2e` green.
   empty boundary unproved), `R3-2` (SUGGESTION, search matches raw `cliente` vs the
   displayed normalized label), `R3-3` (SUGGESTION, `aria-controls` references an
   unmounted id while collapsed).
+  **Follow-up (same PR):** all three advisories addressed — added the zero-quotes
+  boundary test, filtered against the displayed `clientName` label, and gated
+  `aria-controls` on the expanded state. Follow-up review lineage
+  `review-9e425d8fe0e846d0` (medium, 1 lens) approved with no findings; authority burned.
 
 Next step: **T2** — global sent-lists screen (`/listas`) + header nav entry.
 
