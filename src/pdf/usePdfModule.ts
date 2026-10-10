@@ -8,6 +8,8 @@ import {
   reloadPage,
 } from './pdfModuleRecovery';
 
+const RELOAD_FALLBACK_MS = 5000;
+
 export type PdfModuleStatus = 'loading' | 'ready' | 'error';
 
 export interface PdfModuleState<T> {
@@ -25,6 +27,11 @@ export interface PdfModuleState<T> {
  * the page reloads. There is no retry loop. Once the guard is set, later
  * failures settle on `error` and surface an actionable reload button instead.
  *
+ * When storage is blocked the guard cannot persist, so recovery cannot be
+ * bounded: the hook settles on `error` without reloading. If `reloadPage`
+ * throws or the navigation never happens, it falls back to `error` after
+ * `RELOAD_FALLBACK_MS`.
+ *
  * `load` MUST be a stable module-level function; the effect is keyed on it.
  */
 export function usePdfModule<T>(load: () => Promise<T>): PdfModuleState<T> {
@@ -33,6 +40,7 @@ export function usePdfModule<T>(load: () => Promise<T>): PdfModuleState<T> {
 
   useEffect(() => {
     let cancelled = false;
+    let reloadFallback: ReturnType<typeof setTimeout> | undefined;
     const isCancelled = (): boolean => cancelled;
 
     const loadModule = async () => {
@@ -47,11 +55,18 @@ export function usePdfModule<T>(load: () => Promise<T>): PdfModuleState<T> {
         console.error('Failed to load PDF module:', error);
         const online =
           (globalThis as { navigator?: { onLine?: boolean } }).navigator?.onLine !== false;
-        if (isChunkLoadError(error) && online && !hasAttemptedRecovery()) {
-          markRecoveryAttempted();
+        if (isChunkLoadError(error) && online && !hasAttemptedRecovery() && markRecoveryAttempted()) {
           await clearStaleAssets();
           if (isCancelled()) return;
-          reloadPage();
+          try {
+            reloadPage();
+          } catch {
+            setStatus('error');
+            return;
+          }
+          reloadFallback = setTimeout(() => {
+            if (!isCancelled()) setStatus('error');
+          }, RELOAD_FALLBACK_MS);
           return;
         }
         setStatus('error');
@@ -62,6 +77,7 @@ export function usePdfModule<T>(load: () => Promise<T>): PdfModuleState<T> {
 
     return () => {
       cancelled = true;
+      if (reloadFallback !== undefined) clearTimeout(reloadFallback);
     };
   }, [load]);
 

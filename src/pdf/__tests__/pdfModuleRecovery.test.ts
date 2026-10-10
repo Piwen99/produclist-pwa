@@ -55,10 +55,21 @@ describe('recovery guard', () => {
 
   it('is false, then true after marking, then false after clearing', () => {
     expect(hasAttemptedRecovery()).toBe(false);
-    markRecoveryAttempted();
+    expect(markRecoveryAttempted()).toBe(true);
     expect(hasAttemptedRecovery()).toBe(true);
     clearRecoveryAttempt();
     expect(hasAttemptedRecovery()).toBe(false);
+  });
+
+  it('returns false when sessionStorage.setItem throws', () => {
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+      throw new Error('storage blocked');
+    });
+
+    expect(markRecoveryAttempted()).toBe(false);
+    expect(hasAttemptedRecovery()).toBe(false);
+
+    setItem.mockRestore();
   });
 });
 
@@ -74,6 +85,7 @@ describe('clearStaleAssets', () => {
 
   it('unregisters every service worker and deletes every cache', async () => {
     const unregister = vi.fn().mockResolvedValue(true);
+    const originalDescriptor = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker');
     Object.defineProperty(navigator, 'serviceWorker', {
       value: { getRegistrations: vi.fn().mockResolvedValue([{ unregister }]) },
       configurable: true,
@@ -88,6 +100,12 @@ describe('clearStaleAssets', () => {
 
     expect(unregister).toHaveBeenCalledTimes(1);
     expect(del).toHaveBeenCalledTimes(2);
+
+    if (originalDescriptor) {
+      Object.defineProperty(navigator, 'serviceWorker', originalDescriptor);
+    } else {
+      delete (navigator as { serviceWorker?: unknown }).serviceWorker;
+    }
   });
 });
 
