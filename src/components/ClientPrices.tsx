@@ -25,9 +25,10 @@ interface ClientDocument {
 /**
  * Stable list key for a document: prefer the persisted id and fall back to the
  * array index when it is missing. The id is widened to `number | undefined |
- * null` so a `null` id (which the domain type does not model, but a degraded
- * row can still carry) takes the same index-based fallback as `undefined`;
- * otherwise every null-id row would share the key `lista-null` / `cotizacion-null`
+ * null` and only trusted when it is a finite number, so a `null` or `NaN` id
+ * (neither modeled by the domain type `id?: number`, but a degraded row can
+ * still carry either) takes the same index-based fallback as `undefined`;
+ * otherwise every such row would share the key `lista-null` / `cotizacion-NaN`
  * and collide.
  */
 function documentKey(
@@ -35,9 +36,9 @@ function documentKey(
   id: number | undefined | null,
   index: number,
 ): string {
-  return id === undefined || id === null
-    ? `${kind}-x${String(index)}`
-    : `${kind}-${String(id)}`;
+  return typeof id === 'number' && Number.isFinite(id)
+    ? `${kind}-${String(id)}`
+    : `${kind}-x${String(index)}`;
 }
 
 /**

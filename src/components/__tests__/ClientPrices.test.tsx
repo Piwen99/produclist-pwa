@@ -193,6 +193,52 @@ describe('ClientPrices', () => {
     errorSpy.mockRestore();
   });
 
+  it('renders two NaN-id sent lists at different positions without colliding', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    repos.clients.listNames = async () => ['Juan'];
+    // `NaN` is a `number`, so it satisfies `id?: number` but is not a real id;
+    // both rows would produce the key `lista-NaN` without the finite-number guard.
+    repos.listSends.list = async () => [
+      {
+        id: NaN,
+        fecha: new Date(2026, 8, 5),
+        cliente: 'Juan',
+        items: [{ nombre: 'ALMENDRA', formato: '11,34', precioNeto: 8000, precioBruto: 9520 }],
+      },
+      {
+        id: NaN,
+        fecha: new Date(2026, 8, 10),
+        cliente: 'Juan',
+        items: [
+          { nombre: 'NUEZ', formato: '5,00', precioNeto: 12000, precioBruto: 14280 },
+          { nombre: 'PISTACHO', formato: '1,00', precioNeto: 20000, precioBruto: 23800 },
+        ],
+      },
+    ];
+    repos.quotes.list = async () => [];
+
+    renderWithProvider(repos);
+
+    const heading = await screen.findByText('Historial de documentos');
+    const section = heading.closest('section') as HTMLElement;
+    const rows = within(section).getAllByRole('listitem');
+
+    // Both NaN-id rows must render; a duplicated `lista-NaN` key makes React
+    // warn and reconcile one of them away.
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('10/09/2026');
+    expect(rows[0]).toHaveTextContent('2 ítems');
+    expect(rows[1]).toHaveTextContent('05/09/2026');
+    expect(rows[1]).toHaveTextContent('1 ítem');
+
+    const duplicateKeyWarning = errorSpy.mock.calls.some((call) =>
+      call.some((arg) => typeof arg === 'string' && arg.includes('same key')),
+    );
+    expect(duplicateKeyWarning).toBe(false);
+
+    errorSpy.mockRestore();
+  });
+
   it('updates the document history and price table when the selected client changes', async () => {
     await repos.listSends.create({
       cliente: 'Juan',
