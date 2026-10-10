@@ -20,6 +20,7 @@ function itemCountLabel(count: number): string {
 export function ListSends() {
   const [listSends, setListSends] = useState<ListSend[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const { repos } = useData();
@@ -32,9 +33,11 @@ export function ListSends() {
       .list()
       .then((data) => {
         setListSends(data);
+        setLoadError(false);
       })
       .catch((error: unknown) => {
         console.error('Error loading sent lists:', error);
+        setLoadError(true);
         showError('Error al cargar las listas enviadas');
       })
       .finally(() => {
@@ -75,6 +78,42 @@ export function ListSends() {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-gray-500 dark:text-gray-400">Cargando...</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Listas Enviadas</h2>
+        <div className="flex flex-col items-center justify-center py-12 text-center bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-12 w-12 text-red-400 mb-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+            />
+          </svg>
+          <p className="text-gray-900 dark:text-white font-medium mb-1">
+            No se pudieron cargar las listas enviadas
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Revisá tu conexión e intentá de nuevo.
+          </p>
+          <button
+            onClick={loadListSends}
+            className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors touch-manipulation"
+          >
+            Reintentar
+          </button>
+        </div>
       </div>
     );
   }

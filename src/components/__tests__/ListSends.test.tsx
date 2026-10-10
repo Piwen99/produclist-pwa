@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -25,17 +25,17 @@ function renderWithProviders(repos: Repositories) {
 function seedListSends(repos: Repositories): Promise<unknown>[] {
   return [
     repos.listSends.create({
+      fecha: new Date('2024-01-10T14:00:00'),
+      cliente: 'María López',
+      items: [{ nombre: 'Avéna', formato: '25', precioNeto: 750, precioBruto: 892 }],
+    }),
+    repos.listSends.create({
       fecha: new Date('2024-01-15T10:30:00'),
       cliente: 'Juan Pérez',
       items: [
         { nombre: 'ALMENDRA', formato: '11,34', precioNeto: 8000, precioBruto: 9520 },
         { nombre: 'Chía', formato: '25', precioNeto: 2800, precioBruto: 3332 },
       ],
-    }),
-    repos.listSends.create({
-      fecha: new Date('2024-01-10T14:00:00'),
-      cliente: 'María López',
-      items: [{ nombre: 'Avéna', formato: '25', precioNeto: 750, precioBruto: 892 }],
     }),
   ];
 }
@@ -47,11 +47,42 @@ describe('ListSends', () => {
     repos = createInMemoryRepositories({ userId: USER_ID, isAdmin: false });
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('shows an empty state when there are no sent lists', async () => {
     renderWithProviders(repos);
 
     expect(await screen.findByText(/no hay listas enviadas/i)).toBeInTheDocument();
     expect(screen.queryByText(/sin resultados/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a distinct load-error state (not the empty state) when loading fails', async () => {
+    vi.spyOn(repos.listSends, 'list').mockRejectedValue(new Error('boom'));
+    renderWithProviders(repos);
+
+    expect(
+      await screen.findByText(/no se pudieron cargar las listas enviadas/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no hay listas enviadas/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/sin resultados/i)).not.toBeInTheDocument();
+  });
+
+  it('re-runs the load when Reintentar is clicked', async () => {
+    const user = userEvent.setup();
+    const listSpy = vi
+      .spyOn(repos.listSends, 'list')
+      .mockRejectedValueOnce(new Error('boom'));
+    await Promise.all(seedListSends(repos));
+    renderWithProviders(repos);
+
+    await screen.findByText(/no se pudieron cargar las listas enviadas/i);
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+
+    expect(await screen.findByText('Juan Pérez')).toBeInTheDocument();
+    expect(listSpy).toHaveBeenCalledTimes(2);
   });
 
   it('renders each sent list with client, date and item count', async () => {
