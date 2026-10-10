@@ -24,6 +24,7 @@ export function ListSends() {
   const [isRetrying, setIsRetrying] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const retryingRef = useRef(false);
   const { repos } = useData();
   const { toast } = useToast();
   // toast.error is memoized in ToastProvider; the toast container object is not.
@@ -50,13 +51,24 @@ export function ListSends() {
     void loadListSends();
   }, [loadListSends]);
 
-  // Guard retriggers: the button is disabled while a retry is in flight, so an
-  // extra click cannot start an overlapping load.
+  // Re-entrancy guard: the ref flips synchronously, so a second click is
+  // ignored even before React re-renders and disables the button. Wrapping the
+  // call in a resolved promise also keeps the reset in `finally` running when
+  // `loadListSends` throws synchronously before returning a thenable.
   const handleRetry = () => {
+    if (retryingRef.current) return;
+    retryingRef.current = true;
     setIsRetrying(true);
-    void loadListSends().finally(() => {
-      setIsRetrying(false);
-    });
+    void Promise.resolve()
+      .then(() => loadListSends())
+      .catch((error: unknown) => {
+        console.error('Error retrying sent lists:', error);
+        setLoadError(true);
+      })
+      .finally(() => {
+        retryingRef.current = false;
+        setIsRetrying(false);
+      });
   };
 
   // Keyboard shortcut: Ctrl+/ or Cmd+/ to focus search
