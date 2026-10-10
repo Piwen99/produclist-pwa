@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ListSends } from '../ListSends';
@@ -108,6 +108,36 @@ describe('ListSends', () => {
     expect(retryButton).toBeDisabled();
 
     fireEvent.click(retryButton);
+    expect(listSpy.mock.calls.length).toBe(callsBefore + 1);
+
+    resolveList([]);
+    expect(await screen.findByText(/no hay listas enviadas/i)).toBeInTheDocument();
+  });
+
+  it('suppresses a second retry click through the ref guard before React disables the button', async () => {
+    let resolveList!: (rows: ListSend[]) => void;
+    const pending = new Promise<ListSend[]>((resolve) => {
+      resolveList = resolve;
+    });
+    const listSpy = vi
+      .spyOn(repos.listSends, 'list')
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockReturnValueOnce(pending);
+    renderWithProviders(repos);
+
+    await screen.findByText(/no se pudieron cargar las listas enviadas/i);
+    const callsBefore = listSpy.mock.calls.length;
+    const button = screen.getByRole('button', { name: /reintentar/i });
+
+    // Two clicks inside one act batch: React has not re-rendered between them,
+    // so the button is still enabled and both dispatches reach the handler.
+    // Only the synchronous `retryingRef` guard rejects the second one — this is
+    // the branch the disabled-attribute test above can never reach.
+    await act(async () => {
+      fireEvent.click(button);
+      fireEvent.click(button);
+    });
+
     expect(listSpy.mock.calls.length).toBe(callsBefore + 1);
 
     resolveList([]);

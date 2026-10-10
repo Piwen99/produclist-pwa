@@ -191,7 +191,17 @@ Overall: every task green; coverage holds 60/55/60/60; `verify` + `e2e` green.
   the document key fallback can collide with a real id), `R3-B` (SUGGESTION, id-absent
   boundary untested).
 
-Next step: feature complete (T1–T3). Optional follow-ups: T3 `R3-A`/`R3-B` and T2 `R3-3`.
+- **Hardening — done.** Branches `fix/ui-advisories-*` (PRs #61/#62) and
+  `fix/ui-advisories-residuals` (this PR). PRs #61/#62 closed the T3 key-fallback
+  collision (`R3-A`), its untested id-absent boundary (`R3-B`), the T2 in-flight guard,
+  and the `null`-id collision. This PR closes the last two SUGGESTIONs:
+  (1) `ClientPrices.documentKey` trusts an id only when it is a finite number, so a
+  `NaN` id takes the index fallback instead of colliding on `lista-NaN`; (2) a test that
+  dispatches two retry clicks inside one `act` batch (button still enabled) proves the
+  synchronous `retryingRef` guard rejects the second click — the prior test only covered
+  the `disabled` attribute. Checks: `tsc -b` 0, `lint` 0, `coverage` 0.
+
+Next step: feature complete (T1–T3) and all residual advisories closed.
 
 ## Delivery strategy + slice boundaries
 
