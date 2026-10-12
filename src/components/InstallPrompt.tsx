@@ -55,7 +55,7 @@ export function InstallPrompt() {
   }
 
   return (
-    <div className="fixed bottom-20 left-4 right-4 sm:bottom-24 sm:left-auto sm:right-6 sm:w-80 z-50">
+    <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 right-4 sm:bottom-24 sm:left-auto sm:right-6 sm:w-80 z-50">
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 animate-in fade-in slide-in-from-bottom-4">
         <div className="flex items-start gap-3">
           <div className="flex-1">

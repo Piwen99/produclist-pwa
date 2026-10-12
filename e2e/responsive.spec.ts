@@ -31,6 +31,27 @@ test.describe('Responsive visual tests', () => {
     expect(noHorizontalOverflow).toBe(true);
   });
 
+  test('create-product action is contextual and clears the bottom bar', async ({ page }) => {
+    const createBtn = page.getByRole('button', { name: 'Nuevo producto' });
+    await expect(createBtn).toBeVisible();
+
+    const bottomNav = page.getByRole('navigation', { name: 'Navegación principal' });
+    const pdfFab = page.getByRole('button', { name: 'Generar PDF' });
+    await expect(pdfFab).toBeVisible();
+
+    const [fabBox, navBox] = await Promise.all([
+      pdfFab.boundingBox(),
+      bottomNav.boundingBox(),
+    ]);
+    if (fabBox && navBox) {
+      expect(fabBox.y + fabBox.height).toBeLessThanOrEqual(navBox.y);
+    }
+
+    await page.goto('/cotizador');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('button', { name: 'Nuevo producto' })).toHaveCount(0);
+  });
+
   test('categories must start collapsed', async ({ page }) => {
     // Category headers should be visible
     await expect(page.getByText('Frutos Secos')).toBeVisible();

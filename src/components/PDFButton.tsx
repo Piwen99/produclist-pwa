@@ -28,7 +28,7 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
     return (
       <button
         onClick={reload}
-        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6
+        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 sm:bottom-6 sm:right-6
           flex items-center gap-2
           px-4 sm:px-6 py-3 sm:py-4
           rounded-full shadow-lg
@@ -63,7 +63,7 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
     return (
       <button
         disabled
-        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6
+        className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 sm:bottom-6 sm:right-6
           flex items-center gap-2
           px-4 sm:px-6 py-3 sm:py-4
           rounded-full shadow-lg
@@ -109,7 +109,7 @@ export function PDFButton({ disabled = false }: PDFButtonProps) {
           <button
             disabled={disabled || loading}
             className={`
-              fixed bottom-4 right-4 sm:bottom-6 sm:right-6
+              fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 sm:bottom-6 sm:right-6
               flex items-center gap-2
               px-4 sm:px-6 py-3 sm:py-4
               rounded-full shadow-lg
