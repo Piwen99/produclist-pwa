@@ -14,6 +14,7 @@ import { Cotizador } from './components/Cotizador';
 import { QuoteHistory } from './components/QuoteHistory';
 import { ClientPrices } from './components/ClientPrices';
 import { ListSends } from './components/ListSends';
+import { BottomNav, NAV_ITEMS } from './components/BottomNav';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { ListSendForm } from './components/ListSendForm';
 import { createBackupService, type ImportPreview } from './utils/exportImport';
@@ -236,7 +237,10 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
+      <header
+        className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+      >
         <div className="max-w-5xl mx-auto px-3 sm:px-4 lg:px-6">
           <div className="flex items-center justify-between h-14 sm:h-16">
             <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-2">
@@ -296,67 +300,33 @@ function App() {
                 )}
               </div>
 
-              {/* View tabs */}
-              <nav className="flex min-w-0 items-center gap-0.5 overflow-x-auto">
-                <NavLink
-                  to="/"
-                  end
-                  className={({ isActive }) =>
-                    `shrink-0 px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
-                      isActive
-                        ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    }`}
-                >
-                  Productos
-                </NavLink>
-                <NavLink
-                  to="/cotizador"
-                  className={({ isActive }) =>
-                    `shrink-0 px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
-                      isActive
-                        ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    }`}
-                >
-                  Cotizador
-                </NavLink>
-                <NavLink
-                  to="/historial"
-                  className={({ isActive }) =>
-                    `shrink-0 px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
-                      isActive
-                        ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    }`}
-                >
-                  Historial
-                </NavLink>
-                <NavLink
-                  to="/listas"
-                  className={({ isActive }) =>
-                    `shrink-0 px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
-                      isActive
-                        ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    }`
-                  }
-                >
-                  Listas
-                </NavLink>
-                <NavLink
-                  to="/clientes"
-                  className={({ isActive }) =>
-                    `shrink-0 px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
-                      isActive
-                        ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    }`
-                  }
-                >
-                  Clientes
-                </NavLink>
+              {/* View tabs (desktop) */}
+              <nav
+                aria-label="Navegación de secciones"
+                className="hidden min-w-0 items-center gap-0.5 sm:flex"
+              >
+                {NAV_ITEMS.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    className={({ isActive }) =>
+                      `shrink-0 px-1.5 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors touch-manipulation ${
+                        isActive
+                          ? 'text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/20'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                      }`
+                    }
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
               </nav>
+
+              {/* Brand wordmark (mobile only) */}
+              <span className="sm:hidden truncate text-sm font-semibold text-gray-900 dark:text-white">
+                Produclist
+              </span>
             </div>
             <button
               onClick={handleAddNew}
@@ -450,8 +420,11 @@ function App() {
         />
       )}
 
-      {/* Footer spacer for mobile */}
-      <div className="h-20 sm:h-24" aria-hidden="true" />
+      {/* Fixed bottom tab bar (mobile only) */}
+      <BottomNav />
+
+      {/* Footer spacer clears the fixed bottom bar + home indicator */}
+      <div className="h-[calc(5rem+env(safe-area-inset-bottom))] sm:h-24" aria-hidden="true" />
     </div>
   );
 }

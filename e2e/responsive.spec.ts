@@ -20,6 +20,17 @@ test.describe('Responsive visual tests', () => {
     expect(hasOverflow).toBe(false);
   });
 
+  test('bottom nav is visible with five links and no horizontal overflow', async ({ page }) => {
+    const bottomNav = page.getByRole('navigation', { name: 'Navegación principal' });
+    await expect(bottomNav).toBeVisible();
+    await expect(bottomNav.getByRole('link')).toHaveCount(5);
+
+    const noHorizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    );
+    expect(noHorizontalOverflow).toBe(true);
+  });
+
   test('categories must start collapsed', async ({ page }) => {
     // Category headers should be visible
     await expect(page.getByText('Frutos Secos')).toBeVisible();
