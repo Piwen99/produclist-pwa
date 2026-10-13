@@ -133,6 +133,22 @@ Stable IDs must never be renumbered.
 - **Route**: delegated (`App.tsx` + `PDFButton.tsx` + `InstallPrompt.tsx` = 3 files).
 - **Forecast**: ~120–200 authored lines incl. tests.
 
+### T3 — Verification follow-ups: dark `theme-color` and the empty list-send copy
+
+- **Delivers**: the dark `theme-color` meta matches the sticky header background —
+  `dark:bg-gray-800` in this project's Tailwind v4 resolves to
+  `oklch(27.8% 0.033 256.848)` = `#1e2939` (not the Tailwind v3 `#1f2937`, and not the
+  hardcoded `#1a1a1a`) — so the OS status bar stops mismatching the header in dark
+  scheme; and the backup-import confirmation omits the list-send clause when the file
+  carries no list sends, so it no longer reads "0 listas enviadas".
+- **Acceptance**: in dark scheme the status-bar color equals the sticky header
+  background; a backup with zero list sends shows a confirmation with no list-send
+  clause, and one with N list sends still reads "N listas enviadas".
+- **Checks**: `coverage`, `lint`, `tsc -b` (e2e not applicable — copy + a meta tag only).
+- **Route**: inline (two mechanical edits in `index.html` and `App.tsx` plus one focused
+  test file; no research or unresolved design).
+- **Forecast**: ~40–70 authored lines incl. the test.
+
 ## Acceptance criteria (change-level)
 
 - [ ] At a ~390px viewport all five destinations are visible with no horizontal scroll.
@@ -153,6 +169,7 @@ Commands (exact): `pnpm coverage`, `pnpm lint`, `pnpm exec tsc -b`,
 |------|:--------:|:----:|:------:|:---:|
 | T1 | ✔ | ✔ | ✔ | ✔ |
 | T2 | ✔ | ✔ | ✔ | – |
+| T3 | ✔ | ✔ | ✔ | – |
 
 Overall: every task green; coverage holds 60/55/60/60; `verify` + `e2e` green.
 
@@ -174,6 +191,14 @@ Overall: every task green; coverage holds 60/55/60/60; `verify` + `e2e` green.
   bar via `env(safe-area-inset-bottom)` while desktop is unchanged. Checks: `tsc -b` 0,
   `lint` 0, `coverage` (85.46/77.44/87.34/87.73), Playwright 22/22. Parent spot check:
   12/12 on the three App suites.
+- **T3 — done.** Branch `feat/nav-followups`, commit `085ff4f`
+  (`fix(nav): match the dark theme-color and hide the empty list-send clause`). Closes the
+  two real verification leftovers: the dark `theme-color`/header mismatch (T1 item 4 — the
+  meta was `#1a1a1a` while the header is Tailwind v4 `gray-800` = `#1e2939`) and the
+  zero-list-send copy nit (T2 — the import dialog read "0 listas enviadas"). Adds
+  `src/__tests__/App.importMessage.test.tsx`, which drives the real export/import path
+  (hidden file input → `previewImport` → `ConfirmDialog`) for both counts. Checks:
+  `tsc -b` 0, `lint` 0, `coverage` (85.97/78.12/87.75/88.29, floors 60/55/60/60).
 
 **Native review (RDD) — unavailable, typed.** Both tasks were implemented under
 `gentle-ai review-mode on` (global), but the OpenCode host relay cannot capture a reviewer

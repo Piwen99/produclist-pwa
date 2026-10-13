@@ -227,8 +227,15 @@ function App() {
   const hasProducts = products && products.length > 0;
   const listSendProductCount = products ? buildListSendItems(products).length : 0;
 
+  // Only mention list sends when the file actually carries new ones: an empty
+  // count would read as "0 listas enviadas" and clutter the confirmation.
+  const listSendsClause =
+    importPreview && importPreview.listSendsToAdd.length > 0
+      ? ` y ${String(importPreview.listSendsToAdd.length)} listas enviadas`
+      : '';
+
   const importMessage = importPreview
-    ? `Se agregarán ${String(importPreview.toAdd.length)}, se actualizarán ${String(importPreview.toUpdate.length)} productos y se sumarán ${String(importPreview.quotesToAdd.length)} cotizaciones y ${String(importPreview.listSendsToAdd.length)} listas enviadas.`
+    ? `Se agregarán ${String(importPreview.toAdd.length)}, se actualizarán ${String(importPreview.toUpdate.length)} productos y se sumarán ${String(importPreview.quotesToAdd.length)} cotizaciones${listSendsClause}.`
     : '';
 
   const importNote =
