@@ -79,3 +79,30 @@ describe('Responsive navigation shell', () => {
     }
   });
 });
+
+describe('Contextual create-product action', () => {
+  it('shows the create-product action on the Productos route', async () => {
+    vi.stubEnv('VITE_E2E', '1');
+    renderRoot('/');
+
+    expect(
+      await screen.findByRole('button', { name: 'Nuevo producto' }),
+    ).toBeInTheDocument();
+  });
+
+  it.each(['/cotizador', '/historial', '/listas', '/clientes'])(
+    'hides the create-product action on %s',
+    async (route) => {
+      vi.stubEnv('VITE_E2E', '1');
+      const { unmount } = renderRoot(route);
+
+      // The bottom bar always renders, so it marks the shell as mounted.
+      await screen.findByRole('navigation', { name: 'Navegación principal' });
+      expect(
+        screen.queryByRole('button', { name: 'Nuevo producto' }),
+      ).not.toBeInTheDocument();
+
+      unmount();
+    },
+  );
+});

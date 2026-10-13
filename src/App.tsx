@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Routes, Route, NavLink } from 'react-router-dom';
+import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { useProducts } from './hooks/useProducts';
 import { useAddProduct } from './hooks/useAddProduct';
 import { useUpdateProduct } from './hooks/useUpdateProduct';
@@ -31,6 +31,8 @@ function App() {
   const { toast } = useToast();
   const { signOut } = useAuth();
   const { repos, userId } = useData();
+  // Creating a product only makes sense on the catalog route.
+  const isProductos = useLocation().pathname === '/';
 
   const backupService = useMemo(
     () => createBackupService(repos, userId),
@@ -328,16 +330,18 @@ function App() {
                 Produclist
               </span>
             </div>
-            <button
-              onClick={handleAddNew}
-              aria-label="Nuevo producto"
-              className="flex shrink-0 items-center gap-1.5 sm:gap-2 p-2 sm:px-4 sm:py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors touch-manipulation"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              <span className="hidden sm:inline">Nuevo Producto</span>
-            </button>
+            {isProductos && (
+              <button
+                onClick={handleAddNew}
+                aria-label="Nuevo producto"
+                className="flex shrink-0 items-center gap-1.5 sm:gap-2 p-2 sm:px-4 sm:py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors touch-manipulation"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="hidden sm:inline">Nuevo Producto</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
