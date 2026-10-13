@@ -1,11 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ListSends } from '../ListSends';
 import { ToastProvider } from '../../hooks/ToastProvider';
 import { DataProvider } from '../../data/DataProvider';
-import { createInMemoryRepositories } from '../../data/testing/inMemoryRepos';
+import {
+  createInMemoryClientsRepo,
+  createInMemoryListSendsRepo,
+  createInMemoryProductsRepo,
+  createInMemoryQuotesRepo,
+  createInMemoryRepositories,
+  type Principal,
+} from '../../data/testing/inMemoryRepos';
 import type { Repositories } from '../../data/ports';
 import type { ListSend } from '../../types/listSend';
 
@@ -205,5 +212,111 @@ describe('ListSends', () => {
     fireEvent.keyDown(window, { key: '/', ctrlKey: true });
 
     expect(screen.getByLabelText('Buscar listas enviadas por cliente')).toHaveFocus();
+  });
+
+  describe('delete', () => {
+    it('deletes a sent list through the repo when the confirmation is accepted', async () => {
+      const user = userEvent.setup();
+      await Promise.all(seedListSends(repos));
+      renderWithProviders(repos);
+
+      await screen.findByText('Juan Pérez');
+      // Newest first: index 0 is Juan's send.
+      await user.click(
+        screen.getAllByRole('button', { name: /eliminar lista enviada/i })[0],
+      );
+
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: /^eliminar$/i }));
+
+      await waitFor(() =>
+        expect(screen.queryByText('Juan Pérez')).not.toBeInTheDocument(),
+      );
+      expect(await repos.listSends.listOwn(USER_ID)).toHaveLength(1);
+    });
+
+    it('keeps the sent list when the confirmation is cancelled', async () => {
+      const user = userEvent.setup();
+      await Promise.all(seedListSends(repos));
+      renderWithProviders(repos);
+
+      await screen.findByText('Juan Pérez');
+      await user.click(
+        screen.getAllByRole('button', { name: /eliminar lista enviada/i })[0],
+      );
+
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: /cancelar/i }));
+
+      expect(screen.getByText('Juan Pérez')).toBeInTheDocument();
+      expect(await repos.listSends.listOwn(USER_ID)).toHaveLength(2);
+    });
+
+    it('surfaces an error and keeps the row when the repo rejects', async () => {
+      const user = userEvent.setup();
+      await Promise.all(seedListSends(repos));
+      vi.spyOn(repos.listSends, 'remove').mockRejectedValue(new Error('boom'));
+      renderWithProviders(repos);
+
+      await screen.findByText('Juan Pérez');
+      await user.click(
+        screen.getAllByRole('button', { name: /eliminar lista enviada/i })[0],
+      );
+
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: /^eliminar$/i }));
+
+      expect(
+        await screen.findByText(/no se pudo eliminar la lista enviada/i),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Juan Pérez')).toBeInTheDocument();
+    });
+  });
+
+  describe('admin view', () => {
+    it('hides delete for foreign sent lists while keeping it for own ones', async () => {
+      const principal: Principal = { userId: USER_ID, isAdmin: true };
+      const listSends = createInMemoryListSendsRepo(principal, [
+        {
+          id: 1,
+          fecha: new Date('2024-01-15T10:30:00'),
+          cliente: 'Juan Pérez',
+          items: [{ nombre: 'ALMENDRA', formato: '11,34', precioNeto: 8000, precioBruto: 9520 }],
+          ownerId: USER_ID,
+        },
+        {
+          id: 2,
+          fecha: new Date('2024-01-10T14:00:00'),
+          cliente: 'María López',
+          items: [{ nombre: 'Avéna', formato: '25', precioNeto: 750, precioBruto: 892 }],
+          ownerId: 'other-user',
+        },
+      ]);
+      const quotes = createInMemoryQuotesRepo(principal);
+      const adminRepos: Repositories = {
+        products: createInMemoryProductsRepo(principal),
+        quotes,
+        listSends,
+        clients: createInMemoryClientsRepo(quotes, listSends),
+      };
+
+      renderWithProviders(adminRepos);
+
+      expect(await screen.findByText('Juan Pérez')).toBeInTheDocument();
+      expect(screen.getByText('María López')).toBeInTheDocument();
+
+      const ownRow = screen.getByTestId('list-send-1');
+      const foreignRow = screen.getByTestId('list-send-2');
+
+      expect(
+        within(ownRow).getByRole('button', { name: /eliminar lista enviada/i }),
+      ).toBeInTheDocument();
+      expect(
+        within(foreignRow).queryByRole('button', { name: /eliminar lista enviada/i }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.getAllByRole('button', { name: /eliminar lista enviada/i }),
+      ).toHaveLength(1);
+    });
   });
 });
