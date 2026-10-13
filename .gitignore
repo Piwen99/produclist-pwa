@@ -30,6 +30,9 @@ dist-ssr
 # Generated cache (keep .atl/skill-registry.md tracked, not its fingerprint cache)
 .atl/.skill-registry.cache.json
 
+# CodeGraph index (local to each machine, not shared)
+.codegraph/
+
 # Reference files
 referencia/
 
