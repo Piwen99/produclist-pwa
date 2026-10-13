@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ListSend } from '../types/listSend';
+import { ConfirmDialog } from './ConfirmDialog';
 import { useData } from '../data/useData';
 import { useToast } from '../hooks/useToast';
 
@@ -23,9 +24,10 @@ export function ListSends() {
   const [loadError, setLoadError] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<ListSend | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const retryingRef = useRef(false);
-  const { repos } = useData();
+  const { repos, userId } = useData();
   const { toast } = useToast();
   // toast.error is memoized in ToastProvider; the toast container object is not.
   const showError = toast.error;
@@ -68,6 +70,23 @@ export function ListSends() {
       .finally(() => {
         retryingRef.current = false;
         setIsRetrying(false);
+      });
+  };
+
+  const handleConfirmDelete = () => {
+    const send = pendingDelete;
+    setPendingDelete(null);
+    if (send?.id === undefined) return;
+
+    repos.listSends
+      .remove(send.id)
+      .then(() => {
+        setListSends((prev) => prev.filter((row) => row.id !== send.id));
+        toast.success('Lista enviada eliminada');
+      })
+      .catch((error: unknown) => {
+        console.error('Error deleting sent list:', error);
+        toast.error('No se pudo eliminar la lista enviada.');
       });
   };
 
@@ -243,18 +262,34 @@ export function ListSends() {
               {filteredListSends.map((send) => (
                 <li
                   key={send.id}
+                  data-testid={`list-send-${String(send.id)}`}
                   className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4"
                 >
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                      {send.cliente}
-                    </span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                      {formatDate(send.fecha)}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {itemCountLabel(send.items.length)}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {send.cliente}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                          {formatDate(send.fecha)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {itemCountLabel(send.items.length)}
+                      </div>
+                    </div>
+                    {send.ownerId === userId && (
+                      <button
+                        onClick={() => setPendingDelete(send)}
+                        className="shrink-0 p-2 text-gray-400 hover:text-red-500 transition-colors touch-manipulation"
+                        aria-label="Eliminar lista enviada"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
@@ -262,6 +297,16 @@ export function ListSends() {
           )}
         </>
       )}
+
+      <ConfirmDialog
+        isOpen={pendingDelete !== null}
+        title="Eliminar lista enviada"
+        message="¿Estás seguro de eliminar la lista enviada a"
+        itemName={pendingDelete?.cliente}
+        confirmLabel="Eliminar"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }
