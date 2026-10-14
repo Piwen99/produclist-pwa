@@ -297,7 +297,7 @@ describe('createInMemoryListSendsRepo', () => {
 });
 
 describe('createInMemoryClientsRepo', () => {
-  it('merges the RLS-visible quote and send names, de-duplicated and sorted', async () => {
+  it('derives the owner-scoped names from quotes and list sends, de-duplicated and sorted', async () => {
     const quotes = createInMemoryQuotesRepo(VENDOR, [
       quoteRow({ id: 1, ownerId: 'vendor-a', cliente: '  Juan ' }),
     ]);
@@ -307,27 +307,22 @@ describe('createInMemoryClientsRepo', () => {
 
     const clients = createInMemoryClientsRepo(quotes, sends);
 
-    expect(await clients.listNames()).toEqual(['Ana', 'Juan']);
+    expect(await clients.listNames('vendor-a')).toEqual(['Ana', 'Juan']);
   });
 
-  it('exposes every owner names to an admin but only own names to a vendor', async () => {
+  it('never returns another owner names, not even for an admin', async () => {
     const rows = [
       quoteRow({ id: 1, ownerId: 'admin-1', cliente: 'Admin Client' }),
       quoteRow({ id: 2, ownerId: 'vendor-b', cliente: 'Vendor Client' }),
     ];
-    const sends = createInMemoryListSendsRepo(ADMIN, []);
+    const adminQuotes = createInMemoryQuotesRepo(ADMIN, rows);
+    const clients = createInMemoryClientsRepo(adminQuotes, createInMemoryListSendsRepo(ADMIN, []));
 
-    const adminClients = createInMemoryClientsRepo(
-      createInMemoryQuotesRepo(ADMIN, rows),
-      sends,
-    );
-    const vendorClients = createInMemoryClientsRepo(
-      createInMemoryQuotesRepo(VENDOR, rows),
-      createInMemoryListSendsRepo(VENDOR, []),
-    );
-
-    expect(await adminClients.listNames()).toEqual(['Admin Client', 'Vendor Client']);
-    expect(await vendorClients.listNames()).toEqual([]);
+    // The permissive double still exposes every owner through list() (leak detector)...
+    expect(await adminQuotes.list()).toHaveLength(2);
+    // ...but listNames is owner-scoped by signature, never a cross-vendor union.
+    expect(await clients.listNames('admin-1')).toEqual(['Admin Client']);
+    expect(await clients.listNames('vendor-b')).toEqual(['Vendor Client']);
   });
 });
 
@@ -341,6 +336,6 @@ describe('createInMemoryRepositories', () => {
     expect(products[0]?.ownerId).toBe('vendor-a');
     expect(await repos.quotes.listOwn('vendor-a')).toEqual([]);
     expect(await repos.listSends.listOwn('vendor-a')).toEqual([]);
-    expect(await repos.clients.listNames()).toEqual([]);
+    expect(await repos.clients.listNames('vendor-a')).toEqual([]);
   });
 });

@@ -3,7 +3,14 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ClientPrices } from '../ClientPrices';
 import { DataProvider } from '../../data/DataProvider';
-import { createInMemoryRepositories } from '../../data/testing/inMemoryRepos';
+import {
+  createInMemoryClientsRepo,
+  createInMemoryListSendsRepo,
+  createInMemoryProductsRepo,
+  createInMemoryQuotesRepo,
+  createInMemoryRepositories,
+  type Principal,
+} from '../../data/testing/inMemoryRepos';
 import type { Repositories } from '../../data/ports';
 import type { ListSend } from '../../types/listSend';
 
@@ -95,7 +102,7 @@ describe('ClientPrices', () => {
   it('renders a document row for a sent list with no id using a fallback key', async () => {
     repos.clients.listNames = async () => ['Juan'];
     // A persisted row must carry an id, but guard the fallback branch anyway.
-    repos.listSends.list = async () => [
+    repos.listSends.listOwn = async () => [
       {
         fecha: new Date(2026, 8, 5),
         cliente: 'Juan',
@@ -105,7 +112,7 @@ describe('ClientPrices', () => {
         ],
       },
     ];
-    repos.quotes.list = async () => [];
+    repos.quotes.listOwn = async () => [];
 
     renderWithProvider(repos);
 
@@ -123,7 +130,7 @@ describe('ClientPrices', () => {
     repos.clients.listNames = async () => ['Juan'];
     // A degraded row can carry `null` even though the domain type is
     // `id?: number`; both must take the index fallback branch.
-    repos.listSends.list = async () => [
+    repos.listSends.listOwn = async () => [
       {
         id: null,
         fecha: new Date(2026, 8, 5),
@@ -134,7 +141,7 @@ describe('ClientPrices', () => {
         ],
       } as unknown as ListSend,
     ];
-    repos.quotes.list = async () => [];
+    repos.quotes.listOwn = async () => [];
 
     renderWithProvider(repos);
 
@@ -152,7 +159,7 @@ describe('ClientPrices', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     repos.clients.listNames = async () => ['Juan'];
     // Both rows would produce the key `lista-null` without the null guard.
-    repos.listSends.list = async () => [
+    repos.listSends.listOwn = async () => [
       {
         id: null,
         fecha: new Date(2026, 8, 5),
@@ -169,7 +176,7 @@ describe('ClientPrices', () => {
         ],
       } as unknown as ListSend,
     ];
-    repos.quotes.list = async () => [];
+    repos.quotes.listOwn = async () => [];
 
     renderWithProvider(repos);
 
@@ -236,5 +243,74 @@ describe('ClientPrices', () => {
 
     expect(await screen.findByText('Sin documentos para este cliente.')).toBeInTheDocument();
     expect(screen.getByText('No hay precios registrados para este cliente.')).toBeInTheDocument();
+  });
+
+  describe('admin view', () => {
+    it('offers only the admin own clients and shows only their per-client rows', async () => {
+      const principal: Principal = { userId: USER_ID, isAdmin: true };
+      const quotes = createInMemoryQuotesRepo(principal, [
+        {
+          id: 1,
+          fecha: new Date(2026, 8, 20),
+          cliente: 'Juan',
+          items: [
+            { id: 'i1', productId: 1, nombre: 'ALMENDRA', formato: '11,34', cantidad: 1, precioKg: 9500 },
+          ],
+          totalNeto: 9500,
+          iva: 1805,
+          total: 11305,
+          ownerId: USER_ID,
+        },
+        {
+          id: 2,
+          fecha: new Date(2026, 8, 25),
+          cliente: 'Maria',
+          items: [
+            { id: 'i2', productId: 2, nombre: 'NUEZ', formato: '5,00', cantidad: 1, precioKg: 12000 },
+          ],
+          totalNeto: 12000,
+          iva: 2280,
+          total: 14280,
+          ownerId: 'other-user',
+        },
+      ]);
+      const listSends = createInMemoryListSendsRepo(principal, [
+        {
+          id: 3,
+          fecha: new Date(2026, 8, 1),
+          cliente: 'Juan',
+          items: [{ nombre: 'PISTACHO', formato: '1,00', precioNeto: 20000, precioBruto: 23800 }],
+          ownerId: 'other-user',
+        },
+      ]);
+      const adminRepos: Repositories = {
+        products: createInMemoryProductsRepo(principal),
+        quotes,
+        listSends,
+        clients: createInMemoryClientsRepo(quotes, listSends),
+      };
+
+      // The permissive double still exposes foreign rows to an admin...
+      expect(await adminRepos.quotes.list()).toHaveLength(2);
+      expect(await adminRepos.listSends.list()).toHaveLength(1);
+      // ...but the client-name port is owner-scoped by signature.
+      expect(await adminRepos.clients.listNames(USER_ID)).toEqual(['Juan']);
+
+      renderWithProvider(adminRepos);
+
+      // The foreign-only client is never offered in the select.
+      const options = await screen.findAllByRole('option');
+      expect(options.map((option) => option.textContent)).toEqual(['Juan']);
+
+      // And the selected client's history holds only the owner's documents.
+      const heading = await screen.findByText('Historial de documentos');
+      const section = heading.closest('section') as HTMLElement;
+      const rows = within(section).getAllByRole('listitem');
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toHaveTextContent('Cotización');
+      expect(rows[0]).toHaveTextContent('20/09/2026');
+      expect(screen.queryByText('Lista enviada')).not.toBeInTheDocument();
+      expect(screen.queryByText('PISTACHO')).not.toBeInTheDocument();
+    });
   });
 });

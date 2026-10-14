@@ -15,7 +15,11 @@ export class OwnershipError extends Error {
 }
 
 export interface ProductsRepo {
-  /** RLS-visible set: own rows; the admin also sees every other owner's rows. */
+  /**
+   * RLS-visible set: own rows; the admin also sees every other owner's rows
+   * until the S2 migration drops the admin clause. The app no longer reads
+   * vendor data through `list()`; it uses `listOwn(userId)`.
+   */
   list(): Promise<Product[]>;
   /** Always owner-scoped to the given user id: seed guard, import/export matching. */
   listOwn(userId: string): Promise<Product[]>;
@@ -39,7 +43,11 @@ export interface Repositories {
 export type QuoteInput = Omit<SavedQuote, 'id' | 'fecha'> & { fecha?: Date };
 
 export interface QuotesRepo {
-  /** RLS-visible set: own rows; the admin also sees every other owner's rows. */
+  /**
+   * RLS-visible set: own rows; the admin also sees every other owner's rows
+   * until the S2 migration drops the admin clause. The app no longer reads
+   * vendor data through `list()`; it uses `listOwn(userId)`.
+   */
   list(): Promise<SavedQuote[]>;
   /** Always owner-scoped to the given user id. */
   listOwn(userId: string): Promise<SavedQuote[]>;
@@ -52,7 +60,11 @@ export interface QuotesRepo {
 export type ListSendInput = Omit<ListSend, 'id' | 'fecha'> & { fecha?: Date };
 
 export interface ListSendsRepo {
-  /** RLS-visible set: own rows; the admin also sees every other owner's rows. */
+  /**
+   * RLS-visible set: own rows; the admin also sees every other owner's rows
+   * until the S2 migration drops the admin clause. The app no longer reads
+   * vendor data through `list()`; it uses `listOwn(userId)`.
+   */
   list(): Promise<ListSend[]>;
   /** Always owner-scoped to the given user id. */
   listOwn(userId: string): Promise<ListSend[]>;
@@ -62,6 +74,10 @@ export interface ListSendsRepo {
 }
 
 export interface ClientsRepo {
-  /** RLS-visible union of client names (the admin sees all owners' rows). */
-  listNames(): Promise<string[]>;
+  /**
+   * Owner-scoped client names, derived only from the given owner's quotes and
+   * list sends. Never a cross-vendor union: a vendor is never offered a client
+   * that exists only in another vendor's documents.
+   */
+  listNames(userId: string): Promise<string[]>;
 }

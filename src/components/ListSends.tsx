@@ -34,7 +34,7 @@ export function ListSends() {
 
   const loadListSends = useCallback(() => {
     return repos.listSends
-      .list()
+      .listOwn(userId)
       .then((data) => {
         setListSends(data);
         setLoadError(false);
@@ -47,7 +47,7 @@ export function ListSends() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [repos, showError]);
+  }, [repos, userId, showError]);
 
   useEffect(() => {
     void loadListSends();

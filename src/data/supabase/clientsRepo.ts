@@ -16,10 +16,12 @@ export interface PostgrestResult<T = unknown> {
 
 /**
  * Narrow hand-rolled view of the supabase-js `from()` chain. The clients
- * adapter only reads both source tables, so it exposes `select` alone.
+ * adapter only reads both source tables, owner-scoped, so it exposes `select`
+ * and `eq` alone.
  */
 export interface ClientsQuery extends PromiseLike<PostgrestResult> {
   select(columns?: string): ClientsQuery;
+  eq(column: string, value: unknown): ClientsQuery;
 }
 
 export interface ClientsClient {
@@ -36,11 +38,12 @@ function toListSendRows(data: unknown): ListSendRow[] {
 
 export function createClientsRepo(client: ClientsClient): ClientsRepo {
   return {
-    async listNames() {
-      // RLS-visible union across both sources: an admin sees every owner's rows.
+    async listNames(userId) {
+      // Owner-scoped across both sources: never a cross-vendor union, so a
+      // vendor is not offered a client that only another owner ever used.
       const [quotesResult, sendsResult] = await Promise.all([
-        client.from('cotizaciones').select('*'),
-        client.from('listas_enviadas').select('*'),
+        client.from('cotizaciones').select('*').eq('owner_id', userId),
+        client.from('listas_enviadas').select('*').eq('owner_id', userId),
       ]);
       if (quotesResult.error) throw mapPostgrestError(quotesResult.error);
       if (sendsResult.error) throw mapPostgrestError(sendsResult.error);

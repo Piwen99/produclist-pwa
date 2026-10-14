@@ -67,7 +67,7 @@ describe('ListSends', () => {
   });
 
   it('shows a distinct load-error state (not the empty state) when loading fails', async () => {
-    vi.spyOn(repos.listSends, 'list').mockRejectedValue(new Error('boom'));
+    vi.spyOn(repos.listSends, 'listOwn').mockRejectedValue(new Error('boom'));
     renderWithProviders(repos);
 
     expect(
@@ -81,7 +81,7 @@ describe('ListSends', () => {
   it('re-runs the load when Reintentar is clicked', async () => {
     const user = userEvent.setup();
     const listSpy = vi
-      .spyOn(repos.listSends, 'list')
+      .spyOn(repos.listSends, 'listOwn')
       .mockRejectedValueOnce(new Error('boom'));
     await Promise.all(seedListSends(repos));
     renderWithProviders(repos);
@@ -101,7 +101,7 @@ describe('ListSends', () => {
       resolveList = resolve;
     });
     const listSpy = vi
-      .spyOn(repos.listSends, 'list')
+      .spyOn(repos.listSends, 'listOwn')
       .mockRejectedValueOnce(new Error('boom'))
       .mockReturnValueOnce(pending);
     renderWithProviders(repos);
@@ -123,7 +123,7 @@ describe('ListSends', () => {
 
   it('resets the retry state when the load throws synchronously', async () => {
     const user = userEvent.setup();
-    vi.spyOn(repos.listSends, 'list')
+    vi.spyOn(repos.listSends, 'listOwn')
       .mockRejectedValueOnce(new Error('boom'))
       .mockImplementationOnce(() => {
         throw new Error('synchronous boom');
@@ -274,7 +274,7 @@ describe('ListSends', () => {
   });
 
   describe('admin view', () => {
-    it('hides delete for foreign sent lists while keeping it for own ones', async () => {
+    it('shows only the admin own sent lists, never another owner rows', async () => {
       const principal: Principal = { userId: USER_ID, isAdmin: true };
       const listSends = createInMemoryListSendsRepo(principal, [
         {
@@ -300,23 +300,18 @@ describe('ListSends', () => {
         clients: createInMemoryClientsRepo(quotes, listSends),
       };
 
+      // The permissive double still exposes the foreign send to an admin...
+      expect(await adminRepos.listSends.list()).toHaveLength(2);
+      expect(await adminRepos.listSends.listOwn(USER_ID)).toHaveLength(1);
+
       renderWithProviders(adminRepos);
 
+      // ...but the surface reads the owner-scoped set: only the own send shows.
       expect(await screen.findByText('Juan Pérez')).toBeInTheDocument();
-      expect(screen.getByText('María López')).toBeInTheDocument();
-
-      const ownRow = screen.getByTestId('list-send-1');
-      const foreignRow = screen.getByTestId('list-send-2');
-
-      expect(
-        within(ownRow).getByRole('button', { name: /eliminar lista enviada/i }),
-      ).toBeInTheDocument();
-      expect(
-        within(foreignRow).queryByRole('button', { name: /eliminar lista enviada/i }),
-      ).not.toBeInTheDocument();
-      expect(
-        screen.getAllByRole('button', { name: /eliminar lista enviada/i }),
-      ).toHaveLength(1);
+      expect(screen.getByTestId('list-send-1')).toBeInTheDocument();
+      expect(screen.queryByText('María López')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('list-send-2')).not.toBeInTheDocument();
+      expect(screen.getByText('1 lista')).toBeInTheDocument();
     });
   });
 });
