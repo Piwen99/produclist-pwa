@@ -17,24 +17,28 @@
 -- admins once it is wired into the project (see odd/tasks/ventas-ach-consulta.md,
 -- S2, where the admin sees every client of the ACH report).
 --
--- `drop policy if exists` + `create policy` keeps a re-run of this file safe:
--- the drop removes whatever currently carries the name, then the create
--- installs the owner-only version.
+-- Re-running this file is safe: each block drops both the pre-migration
+-- `..._select_own_or_admin` name and this migration's own `..._select_own`
+-- name before creating the latter, so a second application is a no-op instead
+-- of a "policy already exists" error.
 
 -- ── productos ──────────────────────────────────────────────────────────────
 drop policy if exists "productos_select_own_or_admin" on public.productos;
+drop policy if exists "productos_select_own" on public.productos;
 create policy "productos_select_own" on public.productos
   for select to authenticated
   using (owner_id = (select auth.uid()));
 
 -- ── cotizaciones ───────────────────────────────────────────────────────────
 drop policy if exists "cotizaciones_select_own_or_admin" on public.cotizaciones;
+drop policy if exists "cotizaciones_select_own" on public.cotizaciones;
 create policy "cotizaciones_select_own" on public.cotizaciones
   for select to authenticated
   using (owner_id = (select auth.uid()));
 
 -- ── listas_enviadas ────────────────────────────────────────────────────────
 drop policy if exists "listas_enviadas_select_own_or_admin" on public.listas_enviadas;
+drop policy if exists "listas_enviadas_select_own" on public.listas_enviadas;
 create policy "listas_enviadas_select_own" on public.listas_enviadas
   for select to authenticated
   using (owner_id = (select auth.uid()));
