@@ -50,6 +50,15 @@ describe('ProductPDFDocument', () => {
     expect(screen.getByText(/2 productos/)).toBeInTheDocument();
   });
 
+  it('renders an all-unavailable list and counts every product', () => {
+    const unavailable = products.map((product) => ({ ...product, disponible: false }));
+    render(<ProductPDFDocument products={unavailable} />);
+
+    expect(screen.getByText('Almendras')).toBeInTheDocument();
+    expect(screen.getByText('Maní')).toBeInTheDocument();
+    expect(screen.getByText(/2 productos/)).toBeInTheDocument();
+  });
+
   it('renders an empty document when the prop is omitted', () => {
     render(<ProductPDFDocument />);
 

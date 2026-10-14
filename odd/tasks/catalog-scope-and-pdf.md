@@ -31,6 +31,7 @@ Test runner: `pnpm test` (vitest; `pnpm exec vitest --run <paths>` for one shot)
 | T3 | S4 | inline | done | `pnpm lint` clean · `pnpm exec tsc -b` clean · `pnpm exec vitest --run` 548/548 (58 files) |
 | T4 | — | RDD | pending | `gentle-ai review assess` on the candidate |
 | T5 | S1-S4 | delegated (verify) | done | independent read-only verification: all four specs PASS, no blockers, 5 advisories |
+| T6 | S1, S2, S4 | inline | done | seam probes committed as regression tests: `DataProvider.adminScope.test.tsx` (4) + the all-unavailable PDF boundary |
 
 ## Log
 
