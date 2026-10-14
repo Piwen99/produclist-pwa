@@ -304,10 +304,10 @@ interface ProductPDFDocumentProps {
 }
 
 export function ProductPDFDocument({ products = [] }: ProductPDFDocumentProps) {
-  const visibleProducts = products.filter(p => p.disponible);
-
+  // Every product in the list is printed, available or not: the PDF is the
+  // vendor's price list, so `disponible` no longer hides rows from it.
   const today = new Date();
-  const grouped = groupByCategory(visibleProducts);
+  const grouped = groupByCategory(products);
 
   // Compute cumulative indices so alternating colors flow across categories
   const categorySections = CATEGORY_ORDER.reduce<{ cat: Category; products: Product[]; startIndex: number }[]>((sections, cat) => {
@@ -346,7 +346,7 @@ export function ProductPDFDocument({ products = [] }: ProductPDFDocumentProps) {
 
         {/* Footer — normal flow, no overlap */}
         <Text style={styles.footer}>
-          Generado el {formatDate(today)} — Andes Granel — {visibleProducts.length} productos
+          Generado el {formatDate(today)} — Andes Granel — {products.length} productos
         </Text>
       </Page>
     </Document>
