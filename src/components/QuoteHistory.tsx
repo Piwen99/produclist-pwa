@@ -142,7 +142,7 @@ export function QuoteHistory() {
 
   const loadQuotes = useCallback(() => {
     repos.quotes
-      .list()
+      .listOwn(userId)
       .then((data) => {
         setQuotes(data);
       })
@@ -153,7 +153,7 @@ export function QuoteHistory() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [repos, showError]);
+  }, [repos, userId, showError]);
 
   useEffect(() => {
     loadQuotes();

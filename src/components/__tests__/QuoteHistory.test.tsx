@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QuoteHistory } from '../QuoteHistory';
 import { ToastProvider } from '../../hooks/ToastProvider';
@@ -296,7 +296,7 @@ describe('QuoteHistory', () => {
   });
 
   describe('admin view', () => {
-    it('hides delete for foreign quotes while keeping it for own quotes', async () => {
+    it('shows only the admin own quotes, never another owner rows', async () => {
       const principal: Principal = { userId: USER_ID, isAdmin: true };
       const quotes = createInMemoryQuotesRepo(principal, [
         { ...mockQuotes[0], id: 1, ownerId: USER_ID },
@@ -310,17 +310,18 @@ describe('QuoteHistory', () => {
         clients: createInMemoryClientsRepo(quotes, listSends),
       };
 
+      // The permissive double still exposes the foreign quote to an admin...
+      expect(await adminRepos.quotes.list()).toHaveLength(2);
+      expect(await adminRepos.quotes.listOwn(USER_ID)).toHaveLength(1);
+
       renderWithProviders(adminRepos);
 
+      // ...but the surface reads the owner-scoped set: only the own quote shows.
       expect(await screen.findByText(/15 de enero de 2024/i)).toBeInTheDocument();
-      expect(screen.getByText(/10 de enero de 2024/i)).toBeInTheDocument();
-
-      const ownCard = screen.getByTestId('quote-card-1');
-      const foreignCard = screen.getByTestId('quote-card-2');
-
-      expect(within(ownCard).getByRole('button', { name: /eliminar cotización/i })).toBeInTheDocument();
-      expect(within(foreignCard).queryByRole('button', { name: /eliminar cotización/i })).not.toBeInTheDocument();
-      expect(screen.getAllByRole('button', { name: /eliminar cotización/i })).toHaveLength(1);
+      expect(screen.getByTestId('quote-card-1')).toBeInTheDocument();
+      expect(screen.queryByText(/10 de enero de 2024/i)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('quote-card-2')).not.toBeInTheDocument();
+      expect(screen.getByText('1 cotización')).toBeInTheDocument();
     });
   });
 });

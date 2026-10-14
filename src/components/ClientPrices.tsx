@@ -73,17 +73,17 @@ export function ClientPrices() {
   const [entries, setEntries] = useState<ClientPriceEntry[]>([]);
   const [documents, setDocuments] = useState<ClientDocument[]>([]);
   const [loading, setLoading] = useState(true);
-  const { repos } = useData();
+  const { repos, userId } = useData();
 
   useEffect(() => {
     void repos.clients
-      .listNames()
+      .listNames(userId)
       .then((names) => {
         setClients(names);
         setSelected((current) => current || names[0] || '');
       })
       .catch(console.error);
-  }, [repos]);
+  }, [repos, userId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,10 +98,11 @@ export function ClientPrices() {
 
       // Match client names case-insensitively: the stored casing is free text.
       const key = selected.trim().toLowerCase();
-      // RLS-visible union: an admin sees every owner's rows, a vendor own only.
+      // Owner-scoped read: for an admin `list()` would also return every other
+      // owner's rows, leaking foreign documents into this client's history.
       const [sends, quotes] = await Promise.all([
-        repos.listSends.list(),
-        repos.quotes.list(),
+        repos.listSends.listOwn(userId),
+        repos.quotes.listOwn(userId),
       ]);
 
       if (!cancelled) {
@@ -119,7 +120,7 @@ export function ClientPrices() {
     return () => {
       cancelled = true;
     };
-  }, [repos, selected]);
+  }, [repos, userId, selected]);
 
   if (clients.length === 0 && !loading) {
     return (

@@ -31,12 +31,12 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
   const [showSelector, setShowSelector] = useState(false);
   const [cliente, setCliente] = useState('');
   const [clients, setClients] = useState<string[]>([]);
-  const { repos } = useData();
+  const { repos, userId } = useData();
   const { toast } = useToast();
 
   useEffect(() => {
-    void repos.clients.listNames().then(setClients).catch(console.error);
-  }, [repos]);
+    void repos.clients.listNames(userId).then(setClients).catch(console.error);
+  }, [repos, userId]);
 
   const handleSave = async () => {
     if (items.length === 0) {

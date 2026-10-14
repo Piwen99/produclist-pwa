@@ -210,21 +210,27 @@ export function createInMemoryListSendsRepo(
 }
 
 /**
- * In-memory stand-in for the Supabase clients adapter: the RLS-visible union of
- * client names, read through the quotes and list-sends ports so an admin sees
- * every owner's names and a vendor only their own.
+ * In-memory stand-in for the Supabase clients adapter: owner-scoped client
+ * names, read strictly through the owner-scoped `listOwn(userId)` of the quotes
+ * and list-sends ports, so a vendor is never offered another vendor's client.
+ *
+ * S6 — the permissive double is kept on purpose: `list()` on the other fakes
+ * still models the PRE-migration permissive RLS (own rows, or every owner's
+ * rows for an admin). A code path that leans on the platform's permissiveness
+ * therefore shows foreign rows in tests — a leak detector — and this factory
+ * must NOT feed on it: it never reads `list()`.
  */
 export function createInMemoryClientsRepo(
   quotes: QuotesRepo,
   listSends: ListSendsRepo,
 ): ClientsRepo {
   return {
-    async listNames() {
-      const [visibleQuotes, visibleSends] = await Promise.all([
-        quotes.list(),
-        listSends.list(),
+    async listNames(userId) {
+      const [ownQuotes, ownSends] = await Promise.all([
+        quotes.listOwn(userId),
+        listSends.listOwn(userId),
       ]);
-      return mergeClientNames(visibleQuotes, visibleSends);
+      return mergeClientNames(ownQuotes, ownSends);
     },
   };
 }

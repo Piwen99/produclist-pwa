@@ -127,9 +127,9 @@ function App() {
   }, [backupService]);
 
   const handleOpenListSend = useCallback(() => {
-    void repos.clients.listNames().then(setClientNames).catch(console.error);
+    void repos.clients.listNames(userId).then(setClientNames).catch(console.error);
     setShowListSendForm(true);
-  }, [repos]);
+  }, [repos, userId]);
 
   const handleSaveListSend = useCallback(async (cliente: string) => {
     setShowListSendForm(false);
