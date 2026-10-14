@@ -69,6 +69,28 @@ describe('QuoteProductSelector', () => {
     expect(await screen.findByText('Maní')).toBeInTheDocument();
   });
 
+  it('should list the catalog even when no product is marked available', async () => {
+    setup([
+      { id: 1, nombre: 'Almendras', categoria: 'Frutos Secos', formato: '1', precioNeto: 100, disponible: false },
+      { id: 2, nombre: 'Maní', categoria: 'Frutos Secos', formato: '1', precioNeto: 100, disponible: false },
+    ]);
+
+    expect(await screen.findByText('Almendras')).toBeInTheDocument();
+    expect(screen.getByText('Maní')).toBeInTheDocument();
+    expect(screen.queryByText('No hay productos disponibles')).not.toBeInTheDocument();
+  });
+
+  it('should report a search miss even when no product is available', async () => {
+    setup([
+      { id: 1, nombre: 'Almendras', categoria: 'Frutos Secos', formato: '1', precioNeto: 100, disponible: false },
+    ]);
+
+    const searchInput = await screen.findByPlaceholderText('Buscar productos…');
+    fireEvent.change(searchInput, { target: { value: 'xyz' } });
+
+    expect(screen.getByText(/No hay productos que coincidan/)).toBeInTheDocument();
+  });
+
   it('should display product formato next to name', async () => {
     setup();
     const almondsButton = await screen.findByRole('button', { name: /almendras/i });

@@ -26,6 +26,9 @@ function QuoteSelectorDialog({ products, onSelect, onClose }: QuoteSelectorDialo
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const ready = products !== undefined;
+  // A product stays quotable even when it is marked unavailable, so the empty
+  // state depends on the catalog itself and never on `disponible`.
+  const hasProducts = (products?.length ?? 0) > 0;
 
   // The dialog owns its chrome (title + close button), so the focus trap covers
   // them. `active` flips to true once products resolve; the trigger keeps focus
@@ -51,8 +54,6 @@ function QuoteSelectorDialog({ products, onSelect, onClose }: QuoteSelectorDialo
     },
     [onSelect]
   );
-
-  const availableProducts = products?.filter(p => p.disponible) ?? [];
 
   return (
     <div
@@ -119,7 +120,7 @@ function QuoteSelectorDialog({ products, onSelect, onClose }: QuoteSelectorDialo
             </div>
 
             {/* Product list */}
-            {availableProducts.length === 0 ? (
+            {!hasProducts ? (
               <p className="text-gray-500 dark:text-gray-400 text-center py-8">
                 No hay productos disponibles
               </p>
