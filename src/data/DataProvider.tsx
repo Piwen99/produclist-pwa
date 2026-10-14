@@ -48,14 +48,18 @@ export function DataProvider({ repos, userId, children }: DataProviderProps) {
     const requestId = refreshSeq.current + 1;
     refreshSeq.current = requestId;
     try {
-      const next = await repos.products.list();
+      // The catalog is a per-user artifact: read the owner-scoped set, never
+      // the RLS-visible one. For an admin `list()` also returns every other
+      // owner's products (read-only through RLS), which merged other vendors'
+      // catalogs into the admin's list and made them undeletable.
+      const next = await repos.products.listOwn(userId);
       // Drop a stale response: only the latest in-flight refresh may write.
       if (requestId !== refreshSeq.current) return;
       cache.set(next);
     } catch (error) {
       console.error('[DataProvider] Failed to refresh products', error);
     }
-  }, [repos, cache]);
+  }, [repos, cache, userId]);
 
   useEffect(() => {
     let active = true;

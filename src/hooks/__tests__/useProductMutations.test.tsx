@@ -64,9 +64,9 @@ afterEach(() => {
 
 describe('product mutation hooks', () => {
   it('adds through the repo, resolves to the created id and refreshes the cache', async () => {
-    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([P1]);
     const create = vi.fn<ProductsRepo['create']>().mockResolvedValue(P1);
-    const repos: Repositories = withProducts(createRepo({ list, create }));
+    const repos: Repositories = withProducts(createRepo({ listOwn, create }));
     const { result } = renderHook(() => useProductsAndMutations(), {
       wrapper: wrapperFor(repos),
     });
@@ -80,13 +80,13 @@ describe('product mutation hooks', () => {
 
     expect(create).toHaveBeenCalledWith(INPUT);
     expect(returnedId).toBe(P1.id);
-    expect(list).toHaveBeenCalledTimes(2);
+    expect(listOwn).toHaveBeenCalledTimes(2);
   });
 
   it('updates through the repo and refreshes the cache', async () => {
-    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([P1]);
     const update = vi.fn<ProductsRepo['update']>().mockResolvedValue(undefined);
-    const repos: Repositories = withProducts(createRepo({ list, update }));
+    const repos: Repositories = withProducts(createRepo({ listOwn, update }));
     const { result } = renderHook(() => useProductsAndMutations(), {
       wrapper: wrapperFor(repos),
     });
@@ -98,13 +98,13 @@ describe('product mutation hooks', () => {
     });
 
     expect(update).toHaveBeenCalledWith(1, { precioNeto: 5 });
-    expect(list).toHaveBeenCalledTimes(2);
+    expect(listOwn).toHaveBeenCalledTimes(2);
   });
 
   it('deletes through the repo and refreshes the cache', async () => {
-    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([P1]);
     const remove = vi.fn<ProductsRepo['remove']>().mockResolvedValue(undefined);
-    const repos: Repositories = withProducts(createRepo({ list, remove }));
+    const repos: Repositories = withProducts(createRepo({ listOwn, remove }));
     const { result } = renderHook(() => useProductsAndMutations(), {
       wrapper: wrapperFor(repos),
     });
@@ -116,7 +116,7 @@ describe('product mutation hooks', () => {
     });
 
     expect(remove).toHaveBeenCalledWith(1);
-    expect(list).toHaveBeenCalledTimes(2);
+    expect(listOwn).toHaveBeenCalledTimes(2);
   });
 
   it('propagates a create failure from the repo', async () => {

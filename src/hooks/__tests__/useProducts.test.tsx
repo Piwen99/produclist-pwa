@@ -63,7 +63,7 @@ describe('useProducts', () => {
   it('stays undefined until the first successful load', async () => {
     const pending = deferred<Product[]>();
     const repos: Repositories = withProducts(
-      createRepo({ list: vi.fn(() => pending.promise) }),
+      createRepo({ listOwn: vi.fn(() => pending.promise) }),
     );
 
     const { result } = renderHook(() => useProducts(), { wrapper: wrapperFor(repos) });
@@ -81,19 +81,19 @@ describe('useProducts', () => {
   it('stays undefined when the first load fails so the skeleton shows', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const repos: Repositories = withProducts(
-      createRepo({ list: vi.fn().mockRejectedValue(new Error('offline')) }),
+      createRepo({ listOwn: vi.fn().mockRejectedValue(new Error('offline')) }),
     );
 
     const { result } = renderHook(() => useProducts(), { wrapper: wrapperFor(repos) });
 
-    await waitFor(() => expect(repos.products.list).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(repos.products.listOwn).toHaveBeenCalledTimes(1));
     expect(result.current).toBeUndefined();
     expect(errorSpy).toHaveBeenCalled();
   });
 
   it('exposes the products loaded by the provider', async () => {
     const repos: Repositories = withProducts(
-      createRepo({ list: vi.fn().mockResolvedValue([P1]) }),
+      createRepo({ listOwn: vi.fn().mockResolvedValue([P1]) }),
     );
 
     const { result } = renderHook(() => useProducts(), { wrapper: wrapperFor(repos) });
