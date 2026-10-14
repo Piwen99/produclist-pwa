@@ -5,7 +5,15 @@ import type { ReactNode } from 'react';
 import { Cotizador } from '../Cotizador';
 import { ToastProvider } from '../../hooks/ToastProvider';
 import { DataProvider } from '../../data/DataProvider';
-import { createInMemoryRepositories } from '../../data/testing/inMemoryRepos';
+import {
+  createInMemoryClientsRepo,
+  createInMemoryListSendsRepo,
+  createInMemoryProductsRepo,
+  createInMemoryQuotesRepo,
+  createInMemoryRepositories,
+  type Principal,
+} from '../../data/testing/inMemoryRepos';
+import type { Repositories } from '../../data/ports';
 import type { QuoteItem } from '../../types/quote';
 import type { ProductInput } from '../../types/product';
 
@@ -181,5 +189,41 @@ describe('Cotizador', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     );
     await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it('should offer only the owner clients in the datalist, never another owner ones', async () => {
+    const principal: Principal = { userId: 'admin-1', isAdmin: true };
+    const quotes = createInMemoryQuotesRepo(principal, [
+      { id: 1, fecha: new Date('2024-01-15T10:00:00'), cliente: 'Propio', items: [], totalNeto: 1, iva: 0, total: 1, ownerId: 'admin-1' },
+      { id: 2, fecha: new Date('2024-01-10T10:00:00'), cliente: 'Ajeno', items: [], totalNeto: 1, iva: 0, total: 1, ownerId: 'other-user' },
+    ]);
+    const listSends = createInMemoryListSendsRepo(principal, []);
+    const repos: Repositories = {
+      products: createInMemoryProductsRepo(principal, catalogSeed),
+      quotes,
+      listSends,
+      clients: createInMemoryClientsRepo(quotes, listSends),
+    };
+
+    render(
+      <ToastProvider>
+        <DataProvider repos={repos} userId="admin-1">
+          <Cotizador
+            items={[]}
+            totals={{ totalKg: 0, subtotal: 0, iva: 0, total: 0 }}
+            {...mockHandlers}
+          />
+        </DataProvider>
+      </ToastProvider>,
+    );
+
+    // The datalist is a sibling of the input, so it is read from the document.
+    await waitFor(() => {
+      const values = Array.from(document.querySelectorAll('#quote-clients option')).map(
+        (option) => (option as HTMLOptionElement).value,
+      );
+      expect(values).toContain('Propio');
+      expect(values).not.toContain('Ajeno');
+    });
   });
 });
