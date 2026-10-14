@@ -36,7 +36,7 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 /**
  * Owns the products cache and exposes the repository seam. Server-first: every
- * mutation re-reads the RLS-visible set, and a failed read keeps the last good
+ * mutation re-reads the owner-scoped set, and a failed read keeps the last good
  * snapshot so the UI never flashes empty on a transient error.
  */
 export function DataProvider({ repos, userId, children }: DataProviderProps) {
