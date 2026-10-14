@@ -38,8 +38,8 @@ function deferred<T>() {
 
 function createRepo(overrides: Partial<ProductsRepo> = {}): ProductsRepo {
   return {
-    list: vi.fn().mockResolvedValue([]),
     listOwn: vi.fn().mockResolvedValue([]),
+    list: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue(P1),
     update: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
@@ -109,7 +109,7 @@ describe('DataProvider', () => {
   it('leaves products undefined until the first successful load', async () => {
     const pending = deferred<Product[]>();
     const repos: Repositories = withProducts(
-      createRepo({ list: vi.fn(() => pending.promise) }),
+      createRepo({ listOwn: vi.fn(() => pending.promise) }),
     );
 
     renderProbe(repos);
@@ -124,12 +124,12 @@ describe('DataProvider', () => {
   });
 
   it('retains the previous snapshot when a later refresh fails', async () => {
-    const list = vi
-      .fn<ProductsRepo['list']>()
+    const listOwn = vi
+      .fn<ProductsRepo['listOwn']>()
       .mockResolvedValueOnce([P1])
       .mockRejectedValueOnce(new Error('offline'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    renderProbe(withProducts(createRepo({ list })));
+    renderProbe(withProducts(createRepo({ listOwn })));
 
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
 
@@ -137,7 +137,7 @@ describe('DataProvider', () => {
       window.dispatchEvent(new Event('online'));
     });
 
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(2));
     expect(screen.getByTestId('count')).toHaveTextContent('1');
     expect(errorSpy).toHaveBeenCalled();
   });
@@ -145,17 +145,17 @@ describe('DataProvider', () => {
   it('keeps the newest snapshot when refreshes resolve out of order', async () => {
     const older = deferred<Product[]>();
     const newer = deferred<Product[]>();
-    const list = vi
-      .fn<ProductsRepo['list']>()
+    const listOwn = vi
+      .fn<ProductsRepo['listOwn']>()
       .mockReturnValueOnce(older.promise)
       .mockReturnValueOnce(newer.promise);
-    renderProbe(withProducts(createRepo({ list })));
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    renderProbe(withProducts(createRepo({ listOwn })));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(1));
 
     act(() => {
       window.dispatchEvent(new Event('online'));
     });
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(2));
 
     // The newer request resolves first...
     await act(async () => {
@@ -173,11 +173,11 @@ describe('DataProvider', () => {
   });
 
   it('refreshes when the document becomes visible', async () => {
-    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
-    renderProbe(withProducts(createRepo({ list })));
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([P1]);
+    renderProbe(withProducts(createRepo({ listOwn })));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(1));
 
-    list.mockClear();
+    listOwn.mockClear();
     Object.defineProperty(document, 'visibilityState', {
       value: 'visible',
       configurable: true,
@@ -187,15 +187,15 @@ describe('DataProvider', () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(1));
   });
 
   it('does not refresh while the document stays hidden', async () => {
-    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
-    renderProbe(withProducts(createRepo({ list })));
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([P1]);
+    renderProbe(withProducts(createRepo({ listOwn })));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(1));
 
-    list.mockClear();
+    listOwn.mockClear();
     Object.defineProperty(document, 'visibilityState', {
       value: 'hidden',
       configurable: true,
@@ -208,62 +208,62 @@ describe('DataProvider', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(list).not.toHaveBeenCalled();
+    expect(listOwn).not.toHaveBeenCalled();
   });
 
   it('refreshes when the window comes back online', async () => {
-    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
-    renderProbe(withProducts(createRepo({ list })));
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([P1]);
+    renderProbe(withProducts(createRepo({ listOwn })));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(1));
 
-    list.mockClear();
+    listOwn.mockClear();
     act(() => {
       window.dispatchEvent(new Event('online'));
     });
 
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(1));
   });
 
   it('refreshes after adding a product', async () => {
-    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([]);
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([]);
     const create = vi.fn<ProductsRepo['create']>().mockResolvedValue(P1);
-    renderProbe(withProducts(createRepo({ list, create })));
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    renderProbe(withProducts(createRepo({ listOwn, create })));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(1));
 
     act(() => {
       screen.getByRole('button', { name: 'add' }).click();
     });
 
     await waitFor(() => expect(create).toHaveBeenCalledWith(INPUT));
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(2));
   });
 
   it('refreshes after updating a product', async () => {
-    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([]);
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([]);
     const update = vi.fn<ProductsRepo['update']>().mockResolvedValue(undefined);
-    renderProbe(withProducts(createRepo({ list, update })));
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    renderProbe(withProducts(createRepo({ listOwn, update })));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(1));
 
     act(() => {
       screen.getByRole('button', { name: 'update' }).click();
     });
 
     await waitFor(() => expect(update).toHaveBeenCalledWith(1, { precioNeto: 5 }));
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(2));
   });
 
   it('refreshes after deleting a product', async () => {
-    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([]);
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([]);
     const remove = vi.fn<ProductsRepo['remove']>().mockResolvedValue(undefined);
-    renderProbe(withProducts(createRepo({ list, remove })));
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    renderProbe(withProducts(createRepo({ listOwn, remove })));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(1));
 
     act(() => {
       screen.getByRole('button', { name: 'delete' }).click();
     });
 
     await waitFor(() => expect(remove).toHaveBeenCalledWith(1));
-    await waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(2));
   });
 
   it('removes the visibility and online listeners on unmount', () => {
@@ -284,12 +284,12 @@ describe('DataProvider', () => {
 
   it('seeds the product catalog for the user before the first refresh', async () => {
     const seedIfEmpty = vi.fn<ProductsRepo['seedIfEmpty']>().mockResolvedValue(undefined);
-    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
-    renderProbe(withProducts(createRepo({ seedIfEmpty, list })));
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([P1]);
+    renderProbe(withProducts(createRepo({ seedIfEmpty, listOwn })));
 
     await waitFor(() => expect(seedIfEmpty).toHaveBeenCalledTimes(1));
     expect(seedIfEmpty).toHaveBeenCalledWith('user-1', seedProducts);
-    expect(list).toHaveBeenCalled();
+    expect(listOwn).toHaveBeenCalled();
   });
 
   it('still refreshes when seeding fails, logging the failure', async () => {
@@ -297,8 +297,8 @@ describe('DataProvider', () => {
     const seedIfEmpty = vi
       .fn<ProductsRepo['seedIfEmpty']>()
       .mockRejectedValue(new Error('seed down'));
-    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
-    renderProbe(withProducts(createRepo({ seedIfEmpty, list })));
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([P1]);
+    renderProbe(withProducts(createRepo({ seedIfEmpty, listOwn })));
 
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
     expect(errorSpy).toHaveBeenCalledWith(
@@ -314,20 +314,20 @@ describe('DataProvider', () => {
       const seedIfEmpty = vi
         .fn<ProductsRepo['seedIfEmpty']>()
         .mockReturnValue(new Promise(() => {}));
-      const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
-      renderProbe(withProducts(createRepo({ seedIfEmpty, list })));
+      const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([P1]);
+      renderProbe(withProducts(createRepo({ seedIfEmpty, listOwn })));
 
       await act(async () => {
         await Promise.resolve();
       });
       expect(seedIfEmpty).toHaveBeenCalledTimes(1);
-      expect(list).not.toHaveBeenCalled();
+      expect(listOwn).not.toHaveBeenCalled();
 
       await act(async () => {
         await vi.advanceTimersByTimeAsync(SEED_TIMEOUT_MS);
       });
 
-      expect(list).toHaveBeenCalledTimes(1);
+      expect(listOwn).toHaveBeenCalledTimes(1);
       expect(errorSpy).toHaveBeenCalledWith(
         '[DataProvider] Failed to seed products',
         expect.any(Error),
@@ -339,17 +339,28 @@ describe('DataProvider', () => {
   });
 
   it('refreshes on mount under StrictMode without leaking subscriptions', async () => {
-    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1]);
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([P1]);
     render(
       <StrictMode>
-        <DataProvider repos={withProducts(createRepo({ list }))} userId="user-1">
+        <DataProvider repos={withProducts(createRepo({ listOwn }))} userId="user-1">
           <Probe />
         </DataProvider>
       </StrictMode>,
     );
 
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
-    expect(list).toHaveBeenCalled();
+    expect(listOwn).toHaveBeenCalled();
+  });
+
+  it("shows an admin only their own catalog, never another owner's products", async () => {
+    const FOREIGN: Product = { ...P1, id: 9, nombre: 'Ajeno', ownerId: 'other-vendor' };
+    const list = vi.fn<ProductsRepo['list']>().mockResolvedValue([P1, FOREIGN]);
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([P1]);
+    renderProbe(withProducts(createRepo({ list, listOwn })), 'admin-1');
+
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
+    expect(listOwn).toHaveBeenCalledWith('admin-1');
+    expect(list).not.toHaveBeenCalled();
   });
 
   it('exposes the injected principal id', () => {

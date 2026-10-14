@@ -37,17 +37,26 @@ const products: Product[] = [
 ];
 
 describe('ProductPDFDocument', () => {
-  it('renders the available products passed in through the prop', () => {
+  it('renders every product passed in through the prop, available or not', () => {
     render(<ProductPDFDocument products={products} />);
 
     expect(screen.getByText('Almendras')).toBeInTheDocument();
-    expect(screen.queryByText('Maní')).not.toBeInTheDocument();
+    expect(screen.getByText('Maní')).toBeInTheDocument();
   });
 
-  it('excludes unavailable products from the count', () => {
+  it('counts every product passed in, available or not', () => {
     render(<ProductPDFDocument products={products} />);
 
-    expect(screen.getByText(/1 productos/)).toBeInTheDocument();
+    expect(screen.getByText(/2 productos/)).toBeInTheDocument();
+  });
+
+  it('renders an all-unavailable list and counts every product', () => {
+    const unavailable = products.map((product) => ({ ...product, disponible: false }));
+    render(<ProductPDFDocument products={unavailable} />);
+
+    expect(screen.getByText('Almendras')).toBeInTheDocument();
+    expect(screen.getByText('Maní')).toBeInTheDocument();
+    expect(screen.getByText(/2 productos/)).toBeInTheDocument();
   });
 
   it('renders an empty document when the prop is omitted', () => {
