@@ -44,9 +44,23 @@ El admin ve las filas de todos los dueños en modo lectura, pero solo puede edit
 | Entorno | Comandos |
 |---------|----------|
 | Local | `supabase start` y luego `supabase db reset` (aplica `supabase/migrations/20261005000000_init.sql`). |
-| Remoto / linkeado | `supabase link --project-ref <project-ref>` y luego `supabase db push`. |
+| Remoto / linkeado | `supabase link --project-ref <project-ref>` y luego `pnpm db:push`. |
 
 No hay seed SQL (`[db.seed] enabled=false`): los 44 productos base se siembran por usuario en runtime desde la app.
+
+### Guard del link
+
+El link del CLI vive solo en `supabase/.temp/`, ignorado por git, así que nada lo mantenía honesto: un relink en otra máquina podía apuntarlo a otro proyecto en silencio. Ya pasó una vez — el CLI quedó apuntando a un proyecto pausado y `supabase db push` habría aplicado las migraciones ahí.
+
+`pnpm db:push` corre `scripts/supabase-link-guard.mjs` antes de `supabase db push`. El guard compara el ref linkeado contra el de producción, versionado en `supabase/project-refs.json`, y si no coinciden **aborta el push** en vez de aplicarlo al proyecto equivocado.
+
+Para revisar el link sin pushear nada:
+
+```bash
+pnpm db:check-link
+```
+
+> Usá `pnpm db:push`, no `supabase db push` directo: el CLI crudo no pasa por el guard.
 
 ## Autenticación y alta de cuentas
 
@@ -111,6 +125,8 @@ Pantalla de login y acción "Cerrar sesión".
 | `pnpm lint` | ESLint sobre el proyecto. |
 | `pnpm preview` | Sirve el build de producción. |
 | `pnpm coverage` | Corrida única de Vitest con cobertura; **el único comando unitario usado en CI**. |
+| `pnpm db:check-link` | Verifica que el CLI de Supabase esté linkeado al proyecto de producción. |
+| `pnpm db:push` | Verifica el link y después corre `supabase db push`. |
 
 > `pnpm test` es modo **watch** (queda escuchando). Para una corrida única se usa `pnpm coverage`.
 
@@ -152,8 +168,11 @@ produclist/
 │   ├── test-setup.ts            # Setup de Vitest
 │   ├── index.css / App.css
 │   └── vite-env.d.ts
+├── scripts/                     # Utilidades de desarrollo
+│   └── supabase-link-guard.mjs  # Aborta un push si el CLI está linkeado a otro proyecto
 ├── supabase/
 │   ├── config.toml
+│   ├── project-refs.json        # Ref de producción esperado por el guard
 │   └── migrations/20261005000000_init.sql
 ├── playwright.config.ts
 ├── vitest.config.ts
