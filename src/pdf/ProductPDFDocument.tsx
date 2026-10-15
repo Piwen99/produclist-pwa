@@ -49,11 +49,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 
-  // ── Column widths (4 columns) ──
-  colProducto: { width: '33%' },
-  colNeto: { width: '23%' },
-  colBruto: { width: '22%' },
-  colTotal: { width: '22%' },
+  // ── Column widths (5 columns) ──
+  // PRODUCTO shrank to 28%, which still fits the longest name in the catalog
+  // ("GARBANZO ENTERO PELADO 8MM"); that slack is what pays for DISPONIBLE.
+  colProducto: { width: '28%' },
+  colDisponible: { width: '10%' },
+  colNeto: { width: '21%' },
+  colBruto: { width: '20%' },
+  colTotal: { width: '21%' },
 
   // ── Header row (dark olive) ──
   headerRow: {
@@ -122,6 +125,12 @@ const styles = StyleSheet.create({
   dataRowOdd: {
     backgroundColor: '#f4f6eb',
   },
+  // Unavailable rows override the zebra stripe so the exceptions pop when the
+  // list is scanned. The state is still spelled out in the DISPONIBLE column,
+  // so the information survives a black-and-white print.
+  dataRowUnavailable: {
+    backgroundColor: '#faeeee',
+  },
   cell: {
     paddingVertical: 4,
     paddingHorizontal: 8,
@@ -161,6 +170,16 @@ const styles = StyleSheet.create({
   formatoInline: {
     fontSize: 8,
     color: '#7a8e5e',
+  },
+  cellDisponible: {
+    fontSize: 8,
+    textAlign: 'center',
+  },
+  cellDisponibleNo: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 8,
+    textAlign: 'center',
+    color: '#b4453a',
   },
 
   // ── Footer (normal flow, no overlap) ──
@@ -219,6 +238,16 @@ function sortProducts(products: Product[]): Product[] {
   return [...products].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
 
+/**
+ * Zebra stripes for the rows that are on sale; a flat tint for the ones that
+ * are not. The tint only reinforces the state — the DISPONIBLE cell spells it
+ * out, so the column stays readable in a black-and-white print.
+ */
+function rowBackgroundStyle(index: number, disponible: boolean) {
+  if (!disponible) return styles.dataRowUnavailable;
+  return index % 2 === 0 ? styles.dataRowEven : styles.dataRowOdd;
+}
+
 // ------------------------------------------------------------------
 // Sub-components
 // ------------------------------------------------------------------
@@ -227,6 +256,9 @@ function TableHeader() {
     <View style={styles.headerRow}>
       <View style={[styles.headerCell, styles.colProducto]}>
         <Text style={styles.headerText}>PRODUCTO</Text>
+      </View>
+      <View style={[styles.headerCell, styles.colDisponible]}>
+        <Text style={styles.headerTextCenter}>DISPONIBLE</Text>
       </View>
       <View style={[styles.headerCell, styles.colNeto]}>
         <Text style={styles.headerTextRight}>PRECIO NETO</Text>
@@ -244,7 +276,7 @@ function TableHeader() {
 function ProductRow({ product, index }: { product: Product; index: number }) {
   const bruto = calcPrecioBruto(product.precioNeto);
   const total = calcTotal(product.formato, bruto);
-  const rowStyle = index % 2 === 0 ? styles.dataRowEven : styles.dataRowOdd;
+  const rowStyle = rowBackgroundStyle(index, product.disponible);
 
   return (
     // wrap={false} keeps the whole row on one page. react-pdf otherwise splits a
@@ -255,6 +287,11 @@ function ProductRow({ product, index }: { product: Product; index: number }) {
         <Text style={styles.cellText}>
           <Text>{product.nombre}</Text>
           <Text style={styles.formatoInline}>{'  —  '}{product.formato} kg</Text>
+        </Text>
+      </View>
+      <View style={[styles.cell, styles.colDisponible]}>
+        <Text style={product.disponible ? styles.cellDisponible : styles.cellDisponibleNo}>
+          {product.disponible ? 'Disponible' : 'No disponible'}
         </Text>
       </View>
       <View style={[styles.cell, styles.colNeto]}>
@@ -305,7 +342,8 @@ interface ProductPDFDocumentProps {
 
 export function ProductPDFDocument({ products = [] }: ProductPDFDocumentProps) {
   // Every product in the list is printed, available or not: the PDF is the
-  // vendor's price list, so `disponible` no longer hides rows from it.
+  // vendor's price list, so `disponible` no longer hides rows from it. Each row
+  // still states its availability in the DISPONIBLE column.
   const today = new Date();
   const grouped = groupByCategory(products);
 
