@@ -45,6 +45,31 @@ export default defineConfig([
     },
   },
 
+  // Dev scripts: plain .mjs, so no type-aware linting — just node globals
+  {
+    files: ['scripts/**/*.mjs'],
+    ignores: ['scripts/**/__tests__/**'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+
+  // Dev script tests
+  {
+    files: ['scripts/**/__tests__/**'],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        describe: true,
+        expect: true,
+        it: true,
+        vi: true,
+      },
+    },
+  },
+
   // Config files: strict type-checked with node tsconfig
   {
     files: ['vite.config.ts', 'vitest.config.ts'],

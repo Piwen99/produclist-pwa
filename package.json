@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
-    "coverage": "vitest --run --coverage"
+    "coverage": "vitest --run --coverage",
+    "db:check-link": "node scripts/supabase-link-guard.mjs",
+    "db:push": "node scripts/supabase-link-guard.mjs && supabase db push"
   },
   "dependencies": {
     "@react-pdf/renderer": "^4.5.1",
