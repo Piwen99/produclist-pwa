@@ -1,7 +1,8 @@
-import { useRef, useState, type SyntheticEvent } from 'react';
+import { useCallback, useRef, useState, type SyntheticEvent } from 'react';
 import { useModalA11y } from '../hooks/useModalA11y';
 
 const MIN_PASSWORD_LENGTH = 8;
+const CURRENT_REQUIRED_MESSAGE = 'Ingresa tu contraseña actual.';
 const TOO_SHORT_MESSAGE = `La nueva contraseña debe tener al menos ${String(MIN_PASSWORD_LENGTH)} caracteres.`;
 const MISMATCH_MESSAGE = 'Las contraseñas nuevas no coinciden.';
 const SAME_MESSAGE = 'La nueva contraseña debe ser distinta de la actual.';
@@ -21,16 +22,30 @@ export function ChangePasswordDialog({ onClose, onSubmit }: ChangePasswordDialog
   const [submitting, setSubmitting] = useState(false);
 
   const currentRef = useRef<HTMLInputElement>(null);
+
+  // While the request is in flight the dialog owns the outcome: dismissing it
+  // would drop a late error on an unmounted component.
+  const requestClose = useCallback(() => {
+    if (submitting) return;
+    onClose();
+  }, [onClose, submitting]);
+
   const { containerRef } = useModalA11y<HTMLDivElement>({
     // Mounted only while open, so the trap is active for its whole lifetime.
     active: true,
-    onClose,
+    onClose: requestClose,
     initialFocusRef: currentRef,
   });
 
   const handleSubmit = async (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submitting) return;
 
+    if (currentPassword.length === 0) {
+      // Native `required` covers the UI path; a programmatic submit bypasses it.
+      setError(CURRENT_REQUIRED_MESSAGE);
+      return;
+    }
     if (newPassword.length < MIN_PASSWORD_LENGTH) {
       setError(TOO_SHORT_MESSAGE);
       return;
@@ -61,10 +76,11 @@ export function ChangePasswordDialog({ onClose, onSubmit }: ChangePasswordDialog
       ref={containerRef}
       className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) requestClose();
       }}
       role="dialog"
       aria-modal="true"
+      aria-busy={submitting}
       aria-labelledby="change-password-title"
     >
       <form
@@ -148,8 +164,9 @@ export function ChangePasswordDialog({ onClose, onSubmit }: ChangePasswordDialog
           <div className="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
             <button
               type="button"
-              onClick={onClose}
-              className="w-full px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-md transition-colors touch-manipulation"
+              onClick={requestClose}
+              disabled={submitting}
+              className="w-full px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-md transition-colors disabled:opacity-60 disabled:cursor-not-allowed touch-manipulation"
             >
               Cancelar
             </button>

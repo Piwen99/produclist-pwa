@@ -275,5 +275,34 @@ describe('createSupabaseAuth', () => {
         createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
       ).rejects.toThrow(PASSWORD_UPDATE_MESSAGE);
     });
+
+    it('maps a thrown session read to a safe message', async () => {
+      const { client, auth } = stubWithSession();
+      auth.getSession.mockRejectedValueOnce(new Error('Network request failed'));
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
+      ).rejects.toThrow(PASSWORD_UPDATE_MESSAGE);
+      expect(auth.updateUser).not.toHaveBeenCalled();
+    });
+
+    it('maps a thrown re-authentication to a safe message', async () => {
+      const { client, auth } = stubWithSession();
+      auth.signInWithPassword.mockRejectedValueOnce(new Error('Failed to fetch'));
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
+      ).rejects.toThrow(PASSWORD_UPDATE_MESSAGE);
+      expect(auth.updateUser).not.toHaveBeenCalled();
+    });
+
+    it('maps a thrown password update to a safe message', async () => {
+      const { client, auth } = stubWithSession();
+      auth.updateUser.mockRejectedValueOnce(new Error('Network connection lost'));
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
+      ).rejects.toThrow(PASSWORD_UPDATE_MESSAGE);
+    });
   });
 });
