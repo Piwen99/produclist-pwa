@@ -2,6 +2,7 @@ import { useCallback, useRef, useState, type SyntheticEvent } from 'react';
 import { useModalA11y } from '../hooks/useModalA11y';
 
 const MIN_PASSWORD_LENGTH = 8;
+const CURRENT_REQUIRED_MESSAGE = 'Ingresa tu contraseña actual.';
 const TOO_SHORT_MESSAGE = `La nueva contraseña debe tener al menos ${String(MIN_PASSWORD_LENGTH)} caracteres.`;
 const MISMATCH_MESSAGE = 'Las contraseñas nuevas no coinciden.';
 const SAME_MESSAGE = 'La nueva contraseña debe ser distinta de la actual.';
@@ -40,6 +41,11 @@ export function ChangePasswordDialog({ onClose, onSubmit }: ChangePasswordDialog
     event.preventDefault();
     if (submitting) return;
 
+    if (currentPassword.length === 0) {
+      // Native `required` covers the UI path; a programmatic submit bypasses it.
+      setError(CURRENT_REQUIRED_MESSAGE);
+      return;
+    }
     if (newPassword.length < MIN_PASSWORD_LENGTH) {
       setError(TOO_SHORT_MESSAGE);
       return;

@@ -161,6 +161,20 @@ describe('ChangePasswordDialog', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('never submits an empty current password through a direct form submit', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderDialog();
+
+    await user.type(screen.getByLabelText('Nueva contraseña'), 'new-secret-1');
+    await user.type(screen.getByLabelText('Repetir nueva contraseña'), 'new-secret-1');
+
+    const form = screen.getByRole('dialog').querySelector('form');
+    expect(form).not.toBeNull();
+    fireEvent.submit(form as HTMLFormElement);
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
   it('cannot be dismissed while the request is in flight', async () => {
     const user = userEvent.setup();
     let resolveSubmit: () => void = () => {};
