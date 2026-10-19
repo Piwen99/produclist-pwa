@@ -30,6 +30,34 @@ test.describe('Auth gate', () => {
     await expect(page.getByLabel('Contraseña')).toBeVisible();
   });
 
+  test('remembers the email only when the box is checked', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('e2e:auth', 'off');
+    });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const remember = page.getByRole('checkbox', { name: 'Recordarme' });
+    await expect(remember).toBeVisible();
+    await expect(remember).not.toBeChecked();
+
+    await page.getByLabel('Correo electrónico').fill('vendedor@example.com');
+    await page.getByLabel('Contraseña').fill('secret');
+    await remember.check();
+    await page.getByRole('button', { name: 'Iniciar sesión' }).click();
+
+    await expect(page.getByRole('button', { name: 'Menú de opciones' })).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('auth:last-email'))).toBe(
+      'vendedor@example.com',
+    );
+    expect(await page.evaluate(() => localStorage.getItem('auth:remember'))).toBe('1');
+
+    await page.getByRole('button', { name: 'Menú de opciones' }).click();
+    await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+
+    await expect(page.getByLabel('Correo electrónico')).toHaveValue('vendedor@example.com');
+  });
+
   test('opens the change-password dialog from the options menu', async ({ page }) => {
     await page.goto('/');
     await page.waitForLoadState('networkidle');

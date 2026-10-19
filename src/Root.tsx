@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { AuthProvider } from './auth/AuthProvider';
 import { LoginScreen } from './auth/LoginScreen';
 import { useAuth } from './auth/useAuth';
+import { AUTH_STORAGE_KEY, createAuthStorage } from './auth/authStorage';
 import { createE2eAuth } from './auth/testing/fakeAuth';
 import { createSupabaseAuth } from './auth/supabaseAuth';
 import { e2eBypassEnabled } from './auth/e2eBypass';
@@ -44,7 +45,12 @@ function resolveWiring(): Wiring | null {
   // layer spawns another GoTrueClient on the same storage key, which fires auth
   // events back into the gate and re-creates repositories in a tight loop
   // (the "Multiple GoTrueClient instances" storm that stalls the first load).
-  const client = createSupabaseClient();
+  // The custom storage keeps the session in localStorage or sessionStorage
+  // depending on the user's "Recordarme" choice.
+  const client = createSupabaseClient(import.meta.env, undefined, {
+    storage: createAuthStorage(),
+    storageKey: AUTH_STORAGE_KEY,
+  });
   return {
     auth: createSupabaseAuth(client),
     createRepositories: () => createSupabaseRepositories(client),

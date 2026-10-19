@@ -1,12 +1,20 @@
 import { useState, type SyntheticEvent } from 'react';
 import { useAuth } from './useAuth';
+import {
+  clearLastEmail,
+  isRememberEnabled,
+  readLastEmail,
+  setRememberPreference,
+  writeLastEmail,
+} from './authStorage';
 
 const INVALID_CREDENTIALS_MESSAGE = 'Correo o contraseña incorrectos.';
 
 export function LoginScreen() {
   const { signIn } = useAuth();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(readLastEmail);
   const [password, setPassword] = useState('');
+  const [remember, setRemember] = useState(isRememberEnabled);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -15,7 +23,15 @@ export function LoginScreen() {
     setError(null);
     setSubmitting(true);
     try {
+      // The storage target is read when the session is written, so the choice
+      // has to be stored before signing in.
+      setRememberPreference(remember);
       await signIn(email, password);
+      if (remember) {
+        writeLastEmail(email);
+      } else {
+        clearLastEmail();
+      }
     } catch {
       // Never surface raw provider messages to the user.
       setError(INVALID_CREDENTIALS_MESSAGE);
@@ -45,7 +61,7 @@ export function LoginScreen() {
             id="login-email"
             name="email"
             type="email"
-            autoComplete="email"
+            autoComplete="username"
             required
             value={email}
             onChange={(event) => setEmail(event.target.value)}
@@ -70,6 +86,27 @@ export function LoginScreen() {
             onChange={(event) => setPassword(event.target.value)}
             className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-orange-500"
           />
+        </div>
+
+        <div>
+          <label
+            htmlFor="login-remember"
+            className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300"
+          >
+            <input
+              id="login-remember"
+              name="remember"
+              type="checkbox"
+              checked={remember}
+              onChange={(event) => setRemember(event.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-orange-500 focus:ring-2 focus:ring-orange-500 dark:border-gray-600 dark:bg-gray-900"
+            />
+            Recordarme
+          </label>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Mantiene la sesión abierta en este dispositivo. Tu navegador puede guardar la
+            contraseña.
+          </p>
         </div>
 
         {error && (

@@ -1,9 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthProvider } from '../AuthProvider';
 import { LoginScreen } from '../LoginScreen';
 import { createFakeAuth } from '../testing/fakeAuth';
+import { LAST_EMAIL_KEY, REMEMBER_KEY } from '../authStorage';
 import type { AuthPort } from '../ports';
 
 function renderLogin(auth: AuthPort = createFakeAuth()) {
@@ -15,6 +16,11 @@ function renderLogin(auth: AuthPort = createFakeAuth()) {
 }
 
 describe('LoginScreen', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
   it('renders Spanish labels tied to email and password inputs', () => {
     renderLogin();
 
@@ -79,5 +85,59 @@ describe('LoginScreen', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Iniciar sesión' })).not.toBeDisabled(),
     );
+  });
+
+  describe('remember me', () => {
+    it('starts unchecked on a device that never chose', () => {
+      renderLogin();
+
+      expect(screen.getByRole('checkbox', { name: 'Recordarme' })).not.toBeChecked();
+    });
+
+    it('reflects the stored preference', () => {
+      localStorage.setItem(REMEMBER_KEY, '1');
+      renderLogin();
+
+      expect(screen.getByRole('checkbox', { name: 'Recordarme' })).toBeChecked();
+    });
+
+    it('prefills the remembered email', () => {
+      localStorage.setItem(LAST_EMAIL_KEY, 'vendedor@example.com');
+      renderLogin();
+
+      expect(screen.getByLabelText('Correo electrónico')).toHaveValue('vendedor@example.com');
+    });
+
+    it('sets the storage preference before signing in and remembers the email', async () => {
+      const user = userEvent.setup();
+      const auth = createFakeAuth();
+      const signIn = vi.spyOn(auth, 'signIn');
+      renderLogin(auth);
+
+      await user.type(screen.getByLabelText('Correo electrónico'), 'vendedor@example.com');
+      await user.type(screen.getByLabelText('Contraseña'), 'secret');
+      await user.click(screen.getByRole('checkbox', { name: 'Recordarme' }));
+      await user.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+
+      expect(signIn).toHaveBeenCalledWith('vendedor@example.com', 'secret');
+      expect(localStorage.getItem(REMEMBER_KEY)).toBe('1');
+      expect(localStorage.getItem(LAST_EMAIL_KEY)).toBe('vendedor@example.com');
+    });
+
+    it('forgets the email when submitting unchecked', async () => {
+      const user = userEvent.setup();
+      localStorage.setItem(REMEMBER_KEY, '1');
+      localStorage.setItem(LAST_EMAIL_KEY, 'old@example.com');
+      renderLogin();
+
+      await user.clear(screen.getByLabelText('Correo electrónico'));
+      await user.type(screen.getByLabelText('Correo electrónico'), 'vendedor@example.com');
+      await user.type(screen.getByLabelText('Contraseña'), 'secret');
+      await user.click(screen.getByRole('checkbox', { name: 'Recordarme' }));
+      await user.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+
+      expect(localStorage.getItem(REMEMBER_KEY)).toBe('0');
+      expect(localStorage.getItem(LAST_EMAIL_KEY)).toBeNull();
+    });
   });
 });

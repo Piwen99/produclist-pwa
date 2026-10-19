@@ -62,6 +62,20 @@ describe('createSupabaseClient', () => {
     expect(result).toBe(client);
   });
 
+  it('forwards the auth storage options to the factory', () => {
+    const client = {} as SupabaseClient;
+    const factory = vi.fn(() => client);
+    const auth = { storageKey: 'produclist-auth' };
+
+    createSupabaseClient(FULL_ENV, factory, auth);
+
+    expect(factory).toHaveBeenCalledWith(
+      FULL_ENV.VITE_SUPABASE_URL,
+      FULL_ENV.VITE_SUPABASE_ANON_KEY,
+      auth,
+    );
+  });
+
   it('surfaces the configuration error path when env is missing', () => {
     expect(() => createSupabaseClient({})).toThrow(SupabaseConfigError);
   });
