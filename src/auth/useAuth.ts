@@ -8,6 +8,7 @@ export interface AuthContextValue {
   session: AuthSession | null;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

@@ -38,6 +38,7 @@ function fakeAuthPort(): AuthPort {
     },
     signIn: () => Promise.resolve(),
     signOut: () => Promise.resolve(),
+    changePassword: () => Promise.resolve(),
   };
 }
 

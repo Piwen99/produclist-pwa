@@ -7,6 +7,7 @@ import { useDeleteProduct } from './hooks/useDeleteProduct';
 import { useQuote } from './hooks/useQuote';
 import { useToast } from './hooks/useToast';
 import { useAuth } from './auth/useAuth';
+import { ChangePasswordDialog } from './auth/ChangePasswordDialog';
 import { ProductList } from './components/ProductList';
 import { ProductForm } from './components/ProductForm';
 import { InstallPrompt } from './components/InstallPrompt';
@@ -29,7 +30,7 @@ function App() {
   const { update } = useUpdateProduct();
   const { remove } = useDeleteProduct();
   const { toast } = useToast();
-  const { signOut } = useAuth();
+  const { signOut, changePassword } = useAuth();
   const { repos, userId } = useData();
   // Creating a product only makes sense on the catalog route.
   const isProductos = useLocation().pathname === '/';
@@ -42,6 +43,7 @@ function App() {
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
@@ -154,6 +156,23 @@ function App() {
       console.error('Error signing out:', error);
     });
   }, [signOut]);
+
+  const handleOpenPasswordDialog = useCallback(() => {
+    setShowMobileMenu(false);
+    setShowPasswordDialog(true);
+  }, []);
+
+  const handleClosePasswordDialog = useCallback(() => {
+    setShowPasswordDialog(false);
+  }, []);
+
+  const handleChangePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      await changePassword(currentPassword, newPassword);
+      toast.success('Contraseña actualizada.');
+    },
+    [changePassword, toast],
+  );
 
   const handleImportClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -297,6 +316,15 @@ function App() {
                       Guardar lista enviada
                     </button>
                     <button
+                      onClick={handleOpenPasswordDialog}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+                      </svg>
+                      Cambiar contraseña
+                    </button>
+                    <button
                       onClick={handleSignOut}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                     >
@@ -428,6 +456,15 @@ function App() {
           clients={clientNames}
           onSave={(cliente) => { void handleSaveListSend(cliente); }}
           onCancel={handleCancelListSend}
+        />
+      )}
+
+      {/* Change the signed-in user's password. Mounted only while open so no
+          typed password survives closing the dialog. */}
+      {showPasswordDialog && (
+        <ChangePasswordDialog
+          onClose={handleClosePasswordDialog}
+          onSubmit={handleChangePassword}
         />
       )}
 

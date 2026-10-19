@@ -50,9 +50,15 @@ export function AuthProvider({ auth, children }: AuthProviderProps) {
 
   const signOut = useCallback(() => auth.signOut(), [auth]);
 
+  const changePassword = useCallback(
+    (currentPassword: string, newPassword: string) =>
+      auth.changePassword(currentPassword, newPassword),
+    [auth],
+  );
+
   const value = useMemo(
-    () => ({ status, session, signIn, signOut }),
-    [status, session, signIn, signOut],
+    () => ({ status, session, signIn, signOut, changePassword }),
+    [status, session, signIn, signOut, changePassword],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

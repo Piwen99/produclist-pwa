@@ -76,6 +76,28 @@ describe('createFakeAuth', () => {
     expect(listener).toHaveBeenCalledWith(null);
     await expect(auth.getSession()).resolves.toBeNull();
   });
+
+  it('accepts a password change when both passwords are valid', async () => {
+    const auth = createFakeAuth();
+
+    await expect(auth.changePassword('current-secret', 'new-secret-1')).resolves.toBeUndefined();
+  });
+
+  it('rejects a password change without the current password', async () => {
+    const auth = createFakeAuth();
+
+    await expect(auth.changePassword('', 'new-secret-1')).rejects.toThrow(
+      'La contraseña actual no es correcta.',
+    );
+  });
+
+  it('rejects a new password shorter than 8 characters', async () => {
+    const auth = createFakeAuth();
+
+    await expect(auth.changePassword('current-secret', 'short')).rejects.toThrow(
+      'La nueva contraseña debe tener al menos 8 caracteres.',
+    );
+  });
 });
 
 describe('createE2eAuth', () => {
@@ -121,5 +143,11 @@ describe('createE2eAuth', () => {
 
     expect(listener).toHaveBeenCalledWith(null);
     await expect(auth.getSession()).resolves.toBeNull();
+  });
+
+  it('accepts a password change with a valid new password', async () => {
+    const auth = createE2eAuth();
+
+    await expect(auth.changePassword('current-secret', 'new-secret-1')).resolves.toBeUndefined();
   });
 });
