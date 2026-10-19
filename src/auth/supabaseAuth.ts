@@ -6,6 +6,8 @@ export const CURRENT_PASSWORD_MESSAGE = 'La contraseña actual no es correcta.';
 export const WEAK_PASSWORD_MESSAGE =
   'La nueva contraseña es demasiado débil. Usa al menos 8 caracteres.';
 export const SAME_PASSWORD_MESSAGE = 'La nueva contraseña debe ser distinta de la actual.';
+export const REAUTHENTICATION_MESSAGE =
+  'Por seguridad, volvé a iniciar sesión y volvé a intentar.';
 export const PASSWORD_UPDATE_MESSAGE =
   'No se pudo actualizar la contraseña. Intenta de nuevo.';
 
@@ -31,6 +33,20 @@ function isSamePassword(error: { code?: string; message?: string }): boolean {
   return (
     error.code === 'same_password' ||
     /different from the old password/i.test(error.message ?? '')
+  );
+}
+
+function isCurrentPasswordMismatch(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === 'current_password_mismatch' ||
+    /current password/i.test(error.message ?? '')
+  );
+}
+
+function isReauthenticationNeeded(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === 'reauthentication_needed' ||
+    /reauthenticat/i.test(error.message ?? '')
   );
 }
 
@@ -80,27 +96,21 @@ export function createSupabaseAuth(client: AuthClient): AuthPort {
     },
 
     async changePassword(currentPassword, newPassword) {
-      // `updateUser` does not verify the current password, so re-authenticate
-      // first: this both proves ownership and refreshes the session.
-      const { data, error } = await attempt(() => client.auth.getSession());
-      if (error) throw new Error(PASSWORD_UPDATE_MESSAGE);
-      const email = data.session?.user.email;
-      if (!email) throw new Error(PASSWORD_UPDATE_MESSAGE);
-
-      const { error: verifyError } = await attempt(() =>
-        client.auth.signInWithPassword({ email, password: currentPassword }),
+      // The provider validates `current_password` when "Secure password change"
+      // is enabled. No separate sign-in: updateUser is authorized by the JWT.
+      const { error } = await attempt(() =>
+        client.auth.updateUser({
+          current_password: currentPassword,
+          password: newPassword,
+        }),
       );
-      if (verifyError) {
-        if (isInvalidCredentials(verifyError)) throw new Error(CURRENT_PASSWORD_MESSAGE);
-        throw new Error(PASSWORD_UPDATE_MESSAGE);
+      if (!error) return;
+      if (isCurrentPasswordMismatch(error) || isInvalidCredentials(error)) {
+        throw new Error(CURRENT_PASSWORD_MESSAGE);
       }
-
-      const { error: updateError } = await attempt(() =>
-        client.auth.updateUser({ password: newPassword }),
-      );
-      if (!updateError) return;
-      if (isWeakPassword(updateError)) throw new Error(WEAK_PASSWORD_MESSAGE);
-      if (isSamePassword(updateError)) throw new Error(SAME_PASSWORD_MESSAGE);
+      if (isWeakPassword(error)) throw new Error(WEAK_PASSWORD_MESSAGE);
+      if (isSamePassword(error)) throw new Error(SAME_PASSWORD_MESSAGE);
+      if (isReauthenticationNeeded(error)) throw new Error(REAUTHENTICATION_MESSAGE);
       throw new Error(PASSWORD_UPDATE_MESSAGE);
     },
   };
