@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { AuthProvider } from './auth/AuthProvider';
 import { LoginScreen } from './auth/LoginScreen';
 import { useAuth } from './auth/useAuth';
-import { AUTH_STORAGE_KEY, createAuthStorage } from './auth/authStorage';
+import { AUTH_STORAGE_KEY, clearLegacyAuthTokens, createAuthStorage } from './auth/authStorage';
 import { createE2eAuth } from './auth/testing/fakeAuth';
 import { createSupabaseAuth } from './auth/supabaseAuth';
 import { e2eBypassEnabled } from './auth/e2eBypass';
@@ -32,6 +32,10 @@ interface Wiring {
 }
 
 function resolveWiring(): Wiring | null {
+  // Remove tokens persisted under Supabase's old default key on every launch.
+  // The app now uses its own key, so those are no longer read and would stay
+  // valid on disk. Deleting an absent key is free and needs no version flag.
+  clearLegacyAuthTokens();
   if (e2eBypassEnabled(import.meta.env)) {
     return {
       auth: createE2eAuth(),

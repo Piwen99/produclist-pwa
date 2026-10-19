@@ -53,6 +53,8 @@ describe('Root Supabase wiring', () => {
     authFactory.mockImplementation(() => fakeAuthPort());
     e2eAuthFactory.mockImplementation(() => fakeAuthPort());
     emit = () => {};
+    localStorage.clear();
+    sessionStorage.clear();
     vi.stubEnv('VITE_E2E', '');
   });
 
@@ -91,6 +93,16 @@ describe('Root Supabase wiring', () => {
       undefined,
       expect.objectContaining({ storageKey: AUTH_STORAGE_KEY }),
     );
+  });
+
+  it('removes legacy Supabase auth tokens on startup', () => {
+    localStorage.setItem('sb-legacy-auth-token', 'old');
+    sessionStorage.setItem('sb-legacy-auth-token', 'old');
+
+    render(<Root />);
+
+    expect(localStorage.getItem('sb-legacy-auth-token')).toBeNull();
+    expect(sessionStorage.getItem('sb-legacy-auth-token')).toBeNull();
   });
 
   it('rebuilds repositories when the authenticated user id changes', async () => {

@@ -5,13 +5,18 @@
  * `localStorage` when "Recordarme" is checked (survives closing the browser),
  * `sessionStorage` otherwise (dies with the browser session).
  *
- * The password itself is never stored. Credential saving stays delegated to the
- * browser password manager through the `autoComplete` attributes of the form.
+ * Web Storage is not always available (blocked cookies, restricted private
+ * contexts, quota). Every access goes through `createSafeStorage`, which keeps
+ * the last value in memory for the tab instead of throwing. The password itself
+ * is never stored: credential saving stays with the browser password manager.
  */
 
 export const AUTH_STORAGE_KEY = 'produclist-auth';
 export const REMEMBER_KEY = 'auth:remember';
 export const LAST_EMAIL_KEY = 'auth:last-email';
+
+/** Supabase's pre-deploy key: `sb-<project-ref>-auth-token`. */
+const LEGACY_AUTH_KEY = /^sb-.*-auth-token$/;
 
 /** The subset of the Web Storage API Supabase needs. */
 export interface AuthStorage {
@@ -20,7 +25,90 @@ export interface AuthStorage {
   removeItem(key: string): void;
 }
 
-function activeStorage(local: Storage, session: Storage): Storage {
+interface SafeStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+interface MemoryState {
+  values: Map<string, string>;
+  /** Keys whose latest write failed: memory wins until a write succeeds. */
+  authoritative: Set<string>;
+}
+
+/**
+ * Fallback state is keyed by the raw Storage object so the login screen and the
+ * Supabase client share it without a module-level mutable singleton.
+ */
+const memories = new WeakMap<Storage, MemoryState>();
+/** Shared memory when even reading the `window.localStorage` accessor throws. */
+const memoryOnly: MemoryState = { values: new Map(), authoritative: new Set() };
+
+function memoryFor(raw: Storage | null): MemoryState {
+  if (!raw) return memoryOnly;
+  let state = memories.get(raw);
+  if (!state) {
+    state = { values: new Map(), authoritative: new Set() };
+    memories.set(raw, state);
+  }
+  return state;
+}
+
+/**
+ * Reads the storage accessor itself. In browsers that block site data, even
+ * `window.localStorage` throws a SecurityError, before any method is called.
+ */
+function readStorage(kind: 'local' | 'session'): Storage | null {
+  try {
+    return kind === 'local' ? window.localStorage : window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Wraps a raw Storage so a blocked or exhausted storage degrades to an
+ * in-memory session instead of crashing the app.
+ */
+export function createSafeStorage(raw: Storage | null): SafeStorage {
+  const memory = memoryFor(raw);
+
+  return {
+    getItem(key) {
+      if (memory.authoritative.has(key)) return memory.values.get(key) ?? null;
+      if (!raw) return memory.values.get(key) ?? null;
+      try {
+        return raw.getItem(key);
+      } catch {
+        return memory.values.get(key) ?? null;
+      }
+    },
+    setItem(key, value) {
+      memory.values.set(key, value);
+      if (!raw) return;
+      try {
+        raw.setItem(key, value);
+        memory.authoritative.delete(key);
+      } catch {
+        memory.authoritative.add(key);
+      }
+    },
+    removeItem(key) {
+      memory.values.delete(key);
+      if (!raw) return;
+      try {
+        raw.removeItem(key);
+        memory.authoritative.delete(key);
+      } catch {
+        // The value may still exist in the real storage; hide it from the app.
+        memory.authoritative.add(key);
+      }
+    },
+  };
+}
+
+function activeStorage(local: SafeStorage, session: SafeStorage): SafeStorage {
   return local.getItem(REMEMBER_KEY) === '1' ? local : session;
 }
 
@@ -30,30 +118,58 @@ function activeStorage(local: Storage, session: Storage): Storage {
  * without rebuilding the client.
  */
 export function createAuthStorage(
-  local: Storage = window.localStorage,
-  session: Storage = window.sessionStorage,
+  local: Storage | null = readStorage('local'),
+  session: Storage | null = readStorage('session'),
 ): AuthStorage {
+  const safeLocal = createSafeStorage(local);
+  const safeSession = createSafeStorage(session);
+
   return {
     getItem(key) {
-      return activeStorage(local, session).getItem(key);
+      return activeStorage(safeLocal, safeSession).getItem(key);
     },
     setItem(key, value) {
-      const target = activeStorage(local, session);
-      const abandoned = target === local ? session : local;
+      const target = activeStorage(safeLocal, safeSession);
+      const abandoned = target === safeLocal ? safeSession : safeLocal;
       // Exactly one copy of the token may exist, or a forgotten session would
       // linger in the abandoned storage.
       abandoned.removeItem(key);
       target.setItem(key, value);
     },
     removeItem(key) {
-      local.removeItem(key);
-      session.removeItem(key);
+      safeLocal.removeItem(key);
+      safeSession.removeItem(key);
     },
   };
 }
 
-export function isRememberEnabled(local: Storage = window.localStorage): boolean {
-  return local.getItem(REMEMBER_KEY) === '1';
+/**
+ * Removes tokens persisted by Supabase before the app used its own storage
+ * key. Runs on every launch: deleting an absent key is free and needs no flag.
+ */
+export function clearLegacyAuthTokens(
+  local: Storage | null = readStorage('local'),
+  session: Storage | null = readStorage('session'),
+): void {
+  for (const storage of [local, session]) {
+    if (!storage) continue;
+    try {
+      const keys: string[] = [];
+      for (let index = 0; index < storage.length; index += 1) {
+        const key = storage.key(index);
+        if (key !== null && LEGACY_AUTH_KEY.test(key)) keys.push(key);
+      }
+      for (const key of keys) storage.removeItem(key);
+    } catch {
+      // Storage unavailable: nothing to clean, and the safe adapter handles it.
+    }
+  }
+}
+
+export function isRememberEnabled(
+  local: Storage | null = readStorage('local'),
+): boolean {
+  return createSafeStorage(local).getItem(REMEMBER_KEY) === '1';
 }
 
 /**
@@ -62,24 +178,29 @@ export function isRememberEnabled(local: Storage = window.localStorage): boolean
  */
 export function setRememberPreference(
   remember: boolean,
-  local: Storage = window.localStorage,
-  session: Storage = window.sessionStorage,
+  local: Storage | null = readStorage('local'),
+  session: Storage | null = readStorage('session'),
 ): void {
-  local.setItem(REMEMBER_KEY, remember ? '1' : '0');
-  const abandoned = remember ? session : local;
+  const safeLocal = createSafeStorage(local);
+  const safeSession = createSafeStorage(session);
+  safeLocal.setItem(REMEMBER_KEY, remember ? '1' : '0');
+  const abandoned = remember ? safeSession : safeLocal;
   // Clearing even when it was already inactive removes any stale token left by
   // an earlier preference, so no forgotten session survives on disk.
   abandoned.removeItem(AUTH_STORAGE_KEY);
 }
 
-export function readLastEmail(local: Storage = window.localStorage): string {
-  return local.getItem(LAST_EMAIL_KEY) ?? '';
+export function readLastEmail(local: Storage | null = readStorage('local')): string {
+  return createSafeStorage(local).getItem(LAST_EMAIL_KEY) ?? '';
 }
 
-export function writeLastEmail(email: string, local: Storage = window.localStorage): void {
-  local.setItem(LAST_EMAIL_KEY, email);
+export function writeLastEmail(
+  email: string,
+  local: Storage | null = readStorage('local'),
+): void {
+  createSafeStorage(local).setItem(LAST_EMAIL_KEY, email);
 }
 
-export function clearLastEmail(local: Storage = window.localStorage): void {
-  local.removeItem(LAST_EMAIL_KEY);
+export function clearLastEmail(local: Storage | null = readStorage('local')): void {
+  createSafeStorage(local).removeItem(LAST_EMAIL_KEY);
 }
