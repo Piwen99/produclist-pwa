@@ -139,5 +139,25 @@ describe('LoginScreen', () => {
       expect(localStorage.getItem(REMEMBER_KEY)).toBe('0');
       expect(localStorage.getItem(LAST_EMAIL_KEY)).toBeNull();
     });
+
+    it('forgets the remembered email when an unchecked sign-in fails', async () => {
+      const user = userEvent.setup();
+      const auth = createFakeAuth();
+      vi.spyOn(auth, 'signIn').mockRejectedValue(new Error('Invalid login credentials'));
+      localStorage.setItem(REMEMBER_KEY, '1');
+      localStorage.setItem(LAST_EMAIL_KEY, 'old@example.com');
+      renderLogin(auth);
+
+      await user.clear(screen.getByLabelText('Correo electrónico'));
+      await user.type(screen.getByLabelText('Correo electrónico'), 'vendedor@example.com');
+      await user.type(screen.getByLabelText('Contraseña'), 'wrong');
+      await user.click(screen.getByRole('checkbox', { name: 'Recordarme' }));
+      await user.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Correo o contraseña incorrectos.',
+      );
+      expect(localStorage.getItem(LAST_EMAIL_KEY)).toBeNull();
+    });
   });
 });

@@ -24,14 +24,12 @@ export function LoginScreen() {
     setSubmitting(true);
     try {
       // The storage target is read when the session is written, so the choice
-      // has to be stored before signing in.
+      // has to be stored before signing in. Unchecking forgets the email even
+      // if the attempt fails: the user asked not to be remembered.
       setRememberPreference(remember);
+      if (!remember) clearLastEmail();
       await signIn(email, password);
-      if (remember) {
-        writeLastEmail(email);
-      } else {
-        clearLastEmail();
-      }
+      if (remember) writeLastEmail(email);
     } catch {
       // Never surface raw provider messages to the user.
       setError(INVALID_CREDENTIALS_MESSAGE);
@@ -98,7 +96,11 @@ export function LoginScreen() {
               name="remember"
               type="checkbox"
               checked={remember}
-              onChange={(event) => setRemember(event.target.checked)}
+              onChange={(event) => {
+                const next = event.target.checked;
+                setRemember(next);
+                if (!next) clearLastEmail();
+              }}
               className="h-4 w-4 rounded border-gray-300 text-orange-500 focus:ring-2 focus:ring-orange-500 dark:border-gray-600 dark:bg-gray-900"
             />
             Recordarme
