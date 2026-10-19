@@ -42,8 +42,11 @@ interface MemoryState {
  * Supabase client share it without a module-level mutable singleton.
  */
 const memories = new WeakMap<Storage, MemoryState>();
+/** Shared memory when even reading the `window.localStorage` accessor throws. */
+const memoryOnly: MemoryState = { values: new Map(), authoritative: new Set() };
 
-function memoryFor(raw: Storage): MemoryState {
+function memoryFor(raw: Storage | null): MemoryState {
+  if (!raw) return memoryOnly;
   let state = memories.get(raw);
   if (!state) {
     state = { values: new Map(), authoritative: new Set() };
@@ -53,15 +56,28 @@ function memoryFor(raw: Storage): MemoryState {
 }
 
 /**
+ * Reads the storage accessor itself. In browsers that block site data, even
+ * `window.localStorage` throws a SecurityError, before any method is called.
+ */
+function readStorage(kind: 'local' | 'session'): Storage | null {
+  try {
+    return kind === 'local' ? window.localStorage : window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Wraps a raw Storage so a blocked or exhausted storage degrades to an
  * in-memory session instead of crashing the app.
  */
-export function createSafeStorage(raw: Storage): SafeStorage {
+export function createSafeStorage(raw: Storage | null): SafeStorage {
   const memory = memoryFor(raw);
 
   return {
     getItem(key) {
       if (memory.authoritative.has(key)) return memory.values.get(key) ?? null;
+      if (!raw) return memory.values.get(key) ?? null;
       try {
         return raw.getItem(key);
       } catch {
@@ -70,6 +86,7 @@ export function createSafeStorage(raw: Storage): SafeStorage {
     },
     setItem(key, value) {
       memory.values.set(key, value);
+      if (!raw) return;
       try {
         raw.setItem(key, value);
         memory.authoritative.delete(key);
@@ -79,6 +96,7 @@ export function createSafeStorage(raw: Storage): SafeStorage {
     },
     removeItem(key) {
       memory.values.delete(key);
+      if (!raw) return;
       try {
         raw.removeItem(key);
         memory.authoritative.delete(key);
@@ -100,8 +118,8 @@ function activeStorage(local: SafeStorage, session: SafeStorage): SafeStorage {
  * without rebuilding the client.
  */
 export function createAuthStorage(
-  local: Storage = window.localStorage,
-  session: Storage = window.sessionStorage,
+  local: Storage | null = readStorage('local'),
+  session: Storage | null = readStorage('session'),
 ): AuthStorage {
   const safeLocal = createSafeStorage(local);
   const safeSession = createSafeStorage(session);
@@ -130,10 +148,11 @@ export function createAuthStorage(
  * key. Runs on every launch: deleting an absent key is free and needs no flag.
  */
 export function clearLegacyAuthTokens(
-  local: Storage = window.localStorage,
-  session: Storage = window.sessionStorage,
+  local: Storage | null = readStorage('local'),
+  session: Storage | null = readStorage('session'),
 ): void {
   for (const storage of [local, session]) {
+    if (!storage) continue;
     try {
       const keys: string[] = [];
       for (let index = 0; index < storage.length; index += 1) {
@@ -147,7 +166,9 @@ export function clearLegacyAuthTokens(
   }
 }
 
-export function isRememberEnabled(local: Storage = window.localStorage): boolean {
+export function isRememberEnabled(
+  local: Storage | null = readStorage('local'),
+): boolean {
   return createSafeStorage(local).getItem(REMEMBER_KEY) === '1';
 }
 
@@ -157,8 +178,8 @@ export function isRememberEnabled(local: Storage = window.localStorage): boolean
  */
 export function setRememberPreference(
   remember: boolean,
-  local: Storage = window.localStorage,
-  session: Storage = window.sessionStorage,
+  local: Storage | null = readStorage('local'),
+  session: Storage | null = readStorage('session'),
 ): void {
   const safeLocal = createSafeStorage(local);
   const safeSession = createSafeStorage(session);
@@ -169,14 +190,17 @@ export function setRememberPreference(
   abandoned.removeItem(AUTH_STORAGE_KEY);
 }
 
-export function readLastEmail(local: Storage = window.localStorage): string {
+export function readLastEmail(local: Storage | null = readStorage('local')): string {
   return createSafeStorage(local).getItem(LAST_EMAIL_KEY) ?? '';
 }
 
-export function writeLastEmail(email: string, local: Storage = window.localStorage): void {
+export function writeLastEmail(
+  email: string,
+  local: Storage | null = readStorage('local'),
+): void {
   createSafeStorage(local).setItem(LAST_EMAIL_KEY, email);
 }
 
-export function clearLastEmail(local: Storage = window.localStorage): void {
+export function clearLastEmail(local: Storage | null = readStorage('local')): void {
   createSafeStorage(local).removeItem(LAST_EMAIL_KEY);
 }

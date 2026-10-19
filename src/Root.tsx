@@ -32,6 +32,10 @@ interface Wiring {
 }
 
 function resolveWiring(): Wiring | null {
+  // Remove tokens persisted under Supabase's old default key on every launch.
+  // The app now uses its own key, so those are no longer read and would stay
+  // valid on disk. Deleting an absent key is free and needs no version flag.
+  clearLegacyAuthTokens();
   if (e2eBypassEnabled(import.meta.env)) {
     return {
       auth: createE2eAuth(),
@@ -45,9 +49,6 @@ function resolveWiring(): Wiring | null {
   // layer spawns another GoTrueClient on the same storage key, which fires auth
   // events back into the gate and re-creates repositories in a tight loop
   // (the "Multiple GoTrueClient instances" storm that stalls the first load).
-  // Remove tokens persisted under Supabase's old default key. The app now uses
-  // its own key, so those are no longer read and would stay valid on disk.
-  clearLegacyAuthTokens();
   // The custom storage keeps the session in localStorage or sessionStorage
   // depending on the user's "Recordarme" choice.
   const client = createSupabaseClient(import.meta.env, undefined, {

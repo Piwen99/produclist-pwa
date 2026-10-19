@@ -296,6 +296,37 @@ describe('authStorage', () => {
       expect(storage.getItem(AUTH_STORAGE_KEY)).toBeNull();
     });
 
+    it('works with no storage at all', () => {
+      const storage = createAuthStorage(null, null);
+
+      storage.setItem(AUTH_STORAGE_KEY, 'token');
+
+      expect(storage.getItem(AUTH_STORAGE_KEY)).toBe('token');
+    });
+
+    it('survives an accessor that throws before any method is called', () => {
+      const descriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+      Object.defineProperty(window, 'localStorage', {
+        configurable: true,
+        get() {
+          throw new Error('storage access blocked');
+        },
+      });
+
+      try {
+        const storage = createAuthStorage();
+
+        expect(() => storage.setItem(AUTH_STORAGE_KEY, 'token')).not.toThrow();
+        expect(storage.getItem(AUTH_STORAGE_KEY)).toBe('token');
+      } finally {
+        if (descriptor) Object.defineProperty(window, 'localStorage', descriptor);
+      }
+    });
+
+    it('cleans legacy tokens without storage', () => {
+      expect(() => clearLegacyAuthTokens(null, null)).not.toThrow();
+    });
+
     it('stores the remember preference without throwing', () => {
       expect(() =>
         setRememberPreference(true, createThrowingStorage(), createThrowingStorage()),
