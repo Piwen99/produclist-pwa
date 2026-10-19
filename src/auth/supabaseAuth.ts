@@ -34,6 +34,18 @@ function isSamePassword(error: { code?: string; message?: string }): boolean {
   );
 }
 
+/**
+ * Maps a thrown transport failure to a safe message. Provider-reported errors
+ * come back in `{ error }` and keep their specific mapping.
+ */
+async function attempt<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch {
+    throw new Error(PASSWORD_UPDATE_MESSAGE);
+  }
+}
+
 export type AuthClient = Pick<SupabaseClient, 'auth'>;
 
 export function createSupabaseAuth(client: AuthClient): AuthPort {
@@ -70,21 +82,22 @@ export function createSupabaseAuth(client: AuthClient): AuthPort {
     async changePassword(currentPassword, newPassword) {
       // `updateUser` does not verify the current password, so re-authenticate
       // first: this both proves ownership and refreshes the session.
-      const { data, error } = await client.auth.getSession();
+      const { data, error } = await attempt(() => client.auth.getSession());
       if (error) throw new Error(PASSWORD_UPDATE_MESSAGE);
       const email = data.session?.user.email;
       if (!email) throw new Error(PASSWORD_UPDATE_MESSAGE);
 
-      const { error: verifyError } = await client.auth.signInWithPassword({
-        email,
-        password: currentPassword,
-      });
+      const { error: verifyError } = await attempt(() =>
+        client.auth.signInWithPassword({ email, password: currentPassword }),
+      );
       if (verifyError) {
         if (isInvalidCredentials(verifyError)) throw new Error(CURRENT_PASSWORD_MESSAGE);
         throw new Error(PASSWORD_UPDATE_MESSAGE);
       }
 
-      const { error: updateError } = await client.auth.updateUser({ password: newPassword });
+      const { error: updateError } = await attempt(() =>
+        client.auth.updateUser({ password: newPassword }),
+      );
       if (!updateError) return;
       if (isWeakPassword(updateError)) throw new Error(WEAK_PASSWORD_MESSAGE);
       if (isSamePassword(updateError)) throw new Error(SAME_PASSWORD_MESSAGE);
