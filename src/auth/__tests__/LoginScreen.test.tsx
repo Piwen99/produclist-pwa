@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AuthProvider } from '../AuthProvider';
@@ -19,6 +19,10 @@ describe('LoginScreen', () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('renders Spanish labels tied to email and password inputs', () => {
@@ -158,6 +162,28 @@ describe('LoginScreen', () => {
         'Correo o contraseña incorrectos.',
       );
       expect(localStorage.getItem(LAST_EMAIL_KEY)).toBeNull();
+    });
+  });
+
+  describe('degraded storage', () => {
+    it('signs in when Web Storage throws on read and write', async () => {
+      const user = userEvent.setup();
+      const auth = createFakeAuth();
+      const signIn = vi.spyOn(auth, 'signIn');
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new Error('storage blocked');
+      });
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('storage blocked');
+      });
+      renderLogin(auth);
+
+      await user.type(screen.getByLabelText('Correo electrónico'), 'vendedor@example.com');
+      await user.type(screen.getByLabelText('Contraseña'), 'secret');
+      await user.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+
+      expect(signIn).toHaveBeenCalledWith('vendedor@example.com', 'secret');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
   });
 });
