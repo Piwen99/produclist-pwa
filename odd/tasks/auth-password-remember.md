@@ -37,3 +37,11 @@ Branch: `feat/auth-password-remember` · Delivery: feature branch, work-unit com
 - **L8 (note)** — Password changes re-authenticate with `signInWithPassword` before `updateUser`. That consumes a login attempt but proves ownership and refreshes the session; `updateUser` alone does not verify the current password.
 - **L9 (independent verification)** — Verifier verdict: one blocker, `S3` email was only cleared after a successful sign-in, so an unchecked failed attempt kept `auth:last-email`. Fixed in commit 3 by clearing on uncheck and before an unchecked attempt; the verifier's 32-probe suite went from 1 failure to 32/32. Advisories: (a) tokens under the pre-deploy default `sb-<ref>-auth-token` key are no longer read but are not deleted — follow-up cleanup; (b) `autoComplete="email"` became `"username"`, intentional for password-manager pairing; (c) pre-existing raw sign-in error text is masked by the login screen.
 - **L10 (verification recheck)** — After the fix: `pnpm vitest run` 63 files / 615 tests green, `pnpm build` green, `pnpm lint` clean, `pnpm playwright test e2e/auth.spec.ts` 8/8.
+- **L11 (native review)** — Lineage `review-b2ac62c402c6c4f3` (lenses risk, resilience, reliability) approved and acknowledged; review authority burned. Ten informational WARNING findings, no correction. Follow-ups worth a separate issue:
+  - `R1-abandoned-storage-key-token`: the pre-deploy `sb-<ref>-auth-token` is no longer read nor deleted; delete it once on startup.
+  - `R1-provider-only-token-authorizes-password`: the current-password check is client-side only; enable Supabase "Secure password change" if backend enforcement is wanted.
+  - `R4-storage-access-guards`: `authStorage` is unguarded if Web Storage access throws (blocked cookies/private mode); add an in-memory fallback.
+  - `R4-login-storage-masks-errors`: storage writes inside the sign-in `try` report as bad credentials.
+  - `R4-dialog-dismiss-during-request`: the dialog can close while a change is in flight.
+  - `R4-password-change-error-classification`: network failures may surface raw text; add a catch in the adapter.
+  - `R3-*`: missing tests for the exact 8-character boundary, empty current password, and throwing storage.
