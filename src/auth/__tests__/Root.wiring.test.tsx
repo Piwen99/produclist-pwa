@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import Root from '../../Root';
+import { AUTH_STORAGE_KEY } from '../authStorage';
 import type { AuthPort, AuthSession } from '../ports';
 
 const clientFactory = vi.hoisted(() => vi.fn(() => ({ marker: 'client' })));
@@ -38,6 +39,7 @@ function fakeAuthPort(): AuthPort {
     },
     signIn: () => Promise.resolve(),
     signOut: () => Promise.resolve(),
+    changePassword: () => Promise.resolve(),
   };
 }
 
@@ -79,6 +81,16 @@ describe('Root Supabase wiring', () => {
 
     expect(clientFactory).toHaveBeenCalledTimes(1);
     expect(reposFactory).toHaveBeenCalledTimes(1);
+  });
+
+  it('creates the Supabase client with the dedicated auth storage', () => {
+    render(<Root />);
+
+    expect(clientFactory).toHaveBeenCalledWith(
+      expect.anything(),
+      undefined,
+      expect.objectContaining({ storageKey: AUTH_STORAGE_KEY }),
+    );
   });
 
   it('rebuilds repositories when the authenticated user id changes', async () => {

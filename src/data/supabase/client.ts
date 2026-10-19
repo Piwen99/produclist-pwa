@@ -10,7 +10,26 @@ export interface SupabaseConfig {
   anonKey: string;
 }
 
-export type SupabaseClientFactory = (url: string, anonKey: string) => ReturnType<typeof createClient>;
+/**
+ * Minimal auth storage contract Supabase needs. Kept local so the data layer
+ * does not depend on the auth layer's storage implementation.
+ */
+export interface SupabaseAuthStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+export interface SupabaseAuthConfig {
+  storage?: SupabaseAuthStorage;
+  storageKey?: string;
+}
+
+export type SupabaseClientFactory = (
+  url: string,
+  anonKey: string,
+  auth?: SupabaseAuthConfig,
+) => ReturnType<typeof createClient>;
 
 export class SupabaseConfigError extends Error {
   constructor(message = 'Falta la configuración de Supabase.') {
@@ -34,8 +53,10 @@ export function assertSupabaseConfig(env: SupabaseEnv = import.meta.env): Supaba
 
 export function createSupabaseClient(
   env: SupabaseEnv = import.meta.env,
-  factory: SupabaseClientFactory = (url, anonKey) => createClient(url, anonKey),
+  factory: SupabaseClientFactory = (url, anonKey, auth) =>
+    createClient(url, anonKey, auth ? { auth } : undefined),
+  auth?: SupabaseAuthConfig,
 ): ReturnType<typeof createClient> {
   const { url, anonKey } = assertSupabaseConfig(env);
-  return factory(url, anonKey);
+  return auth ? factory(url, anonKey, auth) : factory(url, anonKey);
 }

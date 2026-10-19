@@ -49,6 +49,7 @@ describe('AuthProvider', () => {
       onAuthStateChange: () => () => {},
       signIn: vi.fn().mockResolvedValue(undefined),
       signOut: vi.fn().mockResolvedValue(undefined),
+      changePassword: vi.fn().mockResolvedValue(undefined),
     };
     renderProbe(auth);
 
@@ -69,6 +70,7 @@ describe('AuthProvider', () => {
       },
       signIn: vi.fn().mockResolvedValue(undefined),
       signOut: vi.fn().mockResolvedValue(undefined),
+      changePassword: vi.fn().mockResolvedValue(undefined),
     };
     renderProbe(auth);
 
@@ -99,6 +101,7 @@ describe('AuthProvider', () => {
       },
       signIn: vi.fn().mockResolvedValue(undefined),
       signOut: vi.fn().mockResolvedValue(undefined),
+      changePassword: vi.fn().mockResolvedValue(undefined),
     };
     renderProbe(auth);
 
@@ -152,6 +155,22 @@ describe('AuthProvider', () => {
     );
   });
 
+  it('delegates password changes to the auth port', async () => {
+    const auth = createFakeAuth({ initial: { userId: 'user-1', email: 'a@example.com' } });
+    const changePassword = vi.spyOn(auth, 'changePassword');
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AuthProvider auth={auth}>{children}</AuthProvider>
+    );
+    const { result } = renderHook(() => useAuth(), { wrapper });
+
+    await waitFor(() => expect(result.current.status).toBe('authenticated'));
+
+    await expect(
+      result.current.changePassword('current-secret', 'new-secret-1'),
+    ).resolves.toBeUndefined();
+    expect(changePassword).toHaveBeenCalledWith('current-secret', 'new-secret-1');
+  });
+
   it('returns to unauthenticated after sign out', async () => {
     const user = userEvent.setup();
     const auth = createFakeAuth({ initial: { userId: 'user-1', email: 'a@example.com' } });
@@ -170,6 +189,7 @@ describe('AuthProvider', () => {
       onAuthStateChange: vi.fn(() => unsubscribe),
       signIn: vi.fn().mockResolvedValue(undefined),
       signOut: vi.fn().mockResolvedValue(undefined),
+      changePassword: vi.fn().mockResolvedValue(undefined),
     };
     const { unmount } = renderProbe(auth);
 

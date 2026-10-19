@@ -1,6 +1,14 @@
 import type { AuthPort, AuthSession } from '../ports';
 
 const INVALID_CREDENTIALS_MESSAGE = 'Correo o contraseña incorrectos.';
+const CURRENT_PASSWORD_MESSAGE = 'La contraseña actual no es correcta.';
+const WEAK_PASSWORD_MESSAGE = 'La nueva contraseña debe tener al menos 8 caracteres.';
+
+function passwordChangeError(currentPassword: string, newPassword: string): Error | null {
+  if (!currentPassword) return new Error(CURRENT_PASSWORD_MESSAGE);
+  if (newPassword.length < 8) return new Error(WEAK_PASSWORD_MESSAGE);
+  return null;
+}
 
 export type FakeAuth = AuthPort & {
   emit(session: AuthSession | null): void;
@@ -38,6 +46,11 @@ export function createFakeAuth(options: { initial?: AuthSession | null } = {}): 
     signOut() {
       emit(null);
       return Promise.resolve();
+    },
+
+    changePassword(currentPassword, newPassword) {
+      const error = passwordChangeError(currentPassword, newPassword);
+      return error ? Promise.reject(error) : Promise.resolve();
     },
 
     emit,
@@ -80,6 +93,11 @@ export function createE2eAuth(): AuthPort {
     signOut() {
       emit(null);
       return Promise.resolve();
+    },
+
+    changePassword(currentPassword, newPassword) {
+      const error = passwordChangeError(currentPassword, newPassword);
+      return error ? Promise.reject(error) : Promise.resolve();
     },
   };
 }

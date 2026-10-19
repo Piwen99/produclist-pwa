@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
-import { createSupabaseAuth, INVALID_CREDENTIALS_MESSAGE } from '../supabaseAuth';
+import {
+  createSupabaseAuth,
+  CURRENT_PASSWORD_MESSAGE,
+  INVALID_CREDENTIALS_MESSAGE,
+  PASSWORD_UPDATE_MESSAGE,
+  SAME_PASSWORD_MESSAGE,
+  WEAK_PASSWORD_MESSAGE,
+} from '../supabaseAuth';
 
 type AuthChangeHandler = (event: string, session: Session | null) => void;
 
@@ -19,6 +26,7 @@ function makeStub() {
       error: null,
     })),
     signOut: vi.fn(async () => ({ error: null })),
+    updateUser: vi.fn(async () => ({ data: { user: null }, error: null })),
     onAuthStateChange: vi.fn((handler: AuthChangeHandler) => {
       handlers.push(handler);
       return { data: { subscription: { unsubscribe } } };
@@ -177,6 +185,95 @@ describe('createSupabaseAuth', () => {
       auth.signOut.mockResolvedValueOnce({ error });
 
       await expect(createSupabaseAuth(client).signOut()).rejects.toBe(error);
+    });
+  });
+
+  describe('changePassword', () => {
+    function stubWithSession(email: string | null = 'admin@example.com') {
+      const stub = makeStub();
+      stub.auth.getSession.mockResolvedValue({
+        data: { session: makeSession('user-1', email) },
+        error: null,
+      });
+      return stub;
+    }
+
+    it('verifies the current password before updating it', async () => {
+      const { client, auth } = stubWithSession();
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
+      ).resolves.toBeUndefined();
+
+      expect(auth.signInWithPassword).toHaveBeenCalledWith({
+        email: 'admin@example.com',
+        password: 'current-secret',
+      });
+      expect(auth.updateUser).toHaveBeenCalledWith({ password: 'new-secret-1' });
+      expect(auth.signInWithPassword.mock.invocationCallOrder[0]).toBeLessThan(
+        auth.updateUser.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('maps a wrong current password to a safe message and does not update', async () => {
+      const { client, auth } = stubWithSession();
+      auth.signInWithPassword.mockResolvedValueOnce({
+        data: { user: null, session: null },
+        error: { code: 'invalid_credentials', message: 'Invalid login credentials' },
+      });
+
+      await expect(
+        createSupabaseAuth(client).changePassword('wrong-secret', 'new-secret-1'),
+      ).rejects.toThrow(CURRENT_PASSWORD_MESSAGE);
+      expect(auth.updateUser).not.toHaveBeenCalled();
+    });
+
+    it('maps a weak password to a safe message', async () => {
+      const { client, auth } = stubWithSession();
+      auth.updateUser.mockResolvedValueOnce({
+        data: { user: null },
+        error: { code: 'weak_password', message: 'Password should be at least 6 characters.' },
+      });
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'weak'),
+      ).rejects.toThrow(WEAK_PASSWORD_MESSAGE);
+    });
+
+    it('maps a repeated password to a safe message', async () => {
+      const { client, auth } = stubWithSession();
+      auth.updateUser.mockResolvedValueOnce({
+        data: { user: null },
+        error: {
+          code: 'same_password',
+          message: 'New password should be different from the old password.',
+        },
+      });
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'current-secret'),
+      ).rejects.toThrow(SAME_PASSWORD_MESSAGE);
+    });
+
+    it('refuses to continue when there is no session email', async () => {
+      const { client, auth } = stubWithSession(null);
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
+      ).rejects.toThrow(PASSWORD_UPDATE_MESSAGE);
+      expect(auth.updateUser).not.toHaveBeenCalled();
+    });
+
+    it('never surfaces a raw provider message for an unknown failure', async () => {
+      const { client, auth } = stubWithSession();
+      auth.updateUser.mockResolvedValueOnce({
+        data: { user: null },
+        error: { code: 'unexpected_failure', message: 'Internal server error' },
+      });
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
+      ).rejects.toThrow(PASSWORD_UPDATE_MESSAGE);
     });
   });
 });
