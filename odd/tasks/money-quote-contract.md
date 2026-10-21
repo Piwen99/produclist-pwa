@@ -49,10 +49,10 @@ Se acepta el formato de backup válido tal cual: no se exige consistencia entre 
 
 | ID | Specs | Tarea | Ruta | Estado |
 |----|-------|-------|------|--------|
-| T1 | S1, S2 | `src/utils/quoteMath.ts`: `lineKg`, `lineSubtotal`, `invalidLines`, `computeQuoteTotals`; redondeo por línea; migrar los cuatro consumidores. | inline | pendiente |
-| T2 | S3 | `ProductForm` formato obligatorio + migración `not valid` + línea inválida visible + bloqueo de guardar/PDF + comentario de `useQuote`. | inline | pendiente |
-| T3 | S4 | `draftsRepo` con clave por usuario y fallback a memoria; `useQuote(userId)`; limpieza en sign-out y cambio de usuario. | inline | pendiente |
-| T4 | S5 | `parseQuoteItem` valida ítem por ítem, totales finitos y reporta al `errors` del preview. | inline | pendiente |
+| T1 | S1, S2 | `src/utils/quoteMath.ts`: `lineKg`, `lineSubtotal`, `invalidLines`, `computeQuoteTotals`; redondeo por línea; migrar los cuatro consumidores. | inline | ✅ `3fad792` |
+| T2 | S3 | `ProductForm` formato obligatorio + migración `not valid` + línea inválida visible + bloqueo de guardar/PDF + comentario de `useQuote`. | inline | ✅ `564b1c1` |
+| T3 | S4 | `draftsRepo` con clave por usuario y fallback a memoria; `useQuote(userId)`; limpieza en sign-out y cambio de usuario. | inline | ✅ `ab0453f` |
+| T4 | S5 | `parseQuoteItem` valida ítem por ítem, totales finitos y reporta al `errors` del preview. | inline | ✅ `39b2929` |
 
 ## Log
 
@@ -63,3 +63,16 @@ Se acepta el formato de backup válido tal cual: no se exige consistencia entre 
 > arranca por tu orden de impacto
 
 **L3** — 2026-10-21 — decisión de arranque. El plan original de la Lane A decía `#94 → #95`; al leer el código, el predicado de validez (`¿este formato se puede tarifar?`) **es** el primer ladrillo del cálculo. Se invierte el orden: T1 (#95) centraliza la matemática y deja `lineKg() → number | null`; T2 (#94) aplica la política sobre ese predicado. Evita escribir dos veces el mismo helper.
+
+**L4** — 2026-10-21 — evidencia de verificación (T1–T4).
+- `quoteMath`: 12 tests; el caso del issue (`11,33 × $1001` ×2) da subtotal `22.682`, IVA `4.310`, total `26.992`. Antes del fix, `useQuote` devolvía `22682.66` (RED observado).
+- `ProductForm`: el test que pineaba el defecto ("no valida formato vacío" → `onSubmit` llamado) se invirtió a "El formato es obligatorio"; RED observado antes de implementar.
+- `Cotizador`: carrito con línea sin formato → `role="alert"` con el nombre del producto, guardar no escribe (0 cotizaciones), PDF deshabilitado.
+- `draftsRepo`: clave por usuario, `clearDraftFor`, acceso bloqueado y operación suelta que falla → degradación a memoria sin excepción.
+- Sign-out: test de integración en `App.nav.test.tsx`; se verificó el RED quitando la llamada a `clearDraftFor` en `App.tsx` (la clave sobrevive) y restaurándola.
+- `exportImport`: 7 tests nuevos (total no numérico, precio no numérico, `cantidad` faltante, `formato` numérico, `formato` vacío, precio negativo, preview + apply no escriben la entrada mala). RED observado en los 7.
+- Suite completa: 667 tests verdes, `tsc -b` limpio, `eslint .` limpio.
+- No verificado: la migración SQL no se aplicó contra un Postgres real (no hay stack local en esta sesión). Queda cubierta por #92.
+
+**L5** — 2026-10-21 — hallazgo fuera de alcance, no corregido: `parseQuoteItem` (antes y ahora) **descarta `cliente`** al importar, así que un backup restaurado pierde el nombre del cliente de cada cotización. No entra en #96; candidato a issue propio.
+

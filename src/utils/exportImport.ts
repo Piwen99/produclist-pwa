@@ -221,7 +221,7 @@ function isFiniteNonNegative(value: unknown): value is number {
  * a non-string one makes `QuoteHistory` throw while rendering (issue #96).
  */
 function parseQuoteLine(raw: unknown, index: number): QuoteItem | string {
-  const position = `Ítem ${index + 1}`;
+  const position = `Ítem ${String(index + 1)}`;
 
   if (typeof raw !== 'object' || raw === null) {
     return `${position}: debe ser un objeto.`;
