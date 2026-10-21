@@ -56,6 +56,14 @@ export default defineConfig({
             src: '/pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png'
+          },
+          {
+            // Art scaled into the central safe zone; without it Android crops
+            // the edge-to-edge icon when it applies its mask (issue #97).
+            src: '/pwa-512x512-maskable.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       }
