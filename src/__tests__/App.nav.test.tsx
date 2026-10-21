@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Root from '../Root';
 import { ToastProvider } from '../hooks/ToastProvider';
+import { DRAFT_STORAGE_KEY, draftStorageKey } from '../data/local/draftsRepo';
 
 // jsdom does not implement matchMedia; InstallPrompt (rendered by App) probes it.
 beforeEach(() => {
@@ -80,8 +81,7 @@ describe('Responsive navigation shell', () => {
   });
 });
 
-describe('Contextual create-product action', () => {
-  it('shows the create-product action on the Productos route', async () => {
+describe('Contextual create-product action', () => {  it('shows the create-product action on the Productos route', async () => {
     vi.stubEnv('VITE_E2E', '1');
     renderRoot('/');
 
@@ -105,4 +105,27 @@ describe('Contextual create-product action', () => {
       unmount();
     },
   );
+});
+
+describe('Sign-out storage cleanup (issue #90)', () => {
+  it('removes the persisted draft for the user who signed out, and the legacy key', async () => {
+    vi.stubEnv('VITE_E2E', '1');
+    renderRoot('/');
+
+    await screen.findByRole('navigation', { name: 'Navegación principal' });
+
+    // The e2e session's user id, plus a device-wide key left by an older build.
+    const userKey = draftStorageKey('e2e-user');
+    localStorage.setItem(
+      userKey,
+      JSON.stringify({ items: [{ id: 'i1', productId: 1, nombre: 'De e2e', formato: '10', cantidad: 1, precioKg: 100 }], totalNeto: 1000, iva: 190, total: 1190 }),
+    );
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({ items: [], totalNeto: 0, iva: 0, total: 0 }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Menú de opciones' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cerrar sesión' }));
+
+    await waitFor(() => expect(localStorage.getItem(userKey)).toBeNull());
+    expect(localStorage.getItem(DRAFT_STORAGE_KEY)).toBeNull();
+  });
 });

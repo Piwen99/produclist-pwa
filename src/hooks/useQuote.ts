@@ -2,7 +2,11 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { QuoteItem, QuoteTotals } from '../types/quote';
 import type { Product } from '../types/product';
 import { computeQuoteTotals } from '../utils/quoteMath';
-import { createLocalDraftsRepo } from '../data/local/draftsRepo';
+import {
+  createLocalDraftsRepo,
+  draftStorageKey,
+  type DraftsRepo,
+} from '../data/local/draftsRepo';
 
 interface UseQuoteReturn {
   items: QuoteItem[];
@@ -16,14 +20,34 @@ interface UseQuoteReturn {
 
 const DRAFT_DEBOUNCE_MS = 800;
 
-export function useQuote(): UseQuoteReturn {
-  const [draftsRepo] = useState(createLocalDraftsRepo);
+/** Restore the cart from a draft, tolerating any stored shape. */
+function restoreDraft(repo: DraftsRepo): QuoteItem[] {
+  const draft = repo.load();
+  return draft && Array.isArray(draft.items) && draft.items.length > 0 ? draft.items : [];
+}
+
+/**
+ * The cart and its draft. `userId` scopes the storage key: without it, one
+ * vendor's cart was restored for the next user on the same device (issue #90).
+ */
+export function useQuote(userId?: string): UseQuoteReturn {
+  const draftsRepo = useMemo(
+    () => createLocalDraftsRepo(undefined, draftStorageKey(userId)),
+    [userId],
+  );
   // Load the stored draft synchronously before the first render, so a refresh
   // restores the cart and there is no window where autosave could clobber it.
-  const [items, setItems] = useState<QuoteItem[]>(() => {
-    const draft = draftsRepo.load();
-    return draft && Array.isArray(draft.items) && draft.items.length > 0 ? draft.items : [];
-  });
+  const [items, setItems] = useState<QuoteItem[]>(() => restoreDraft(draftsRepo));
+  const [draftOwner, setDraftOwner] = useState(userId);
+
+  // A different signed-in user without a remount: swap drafts during render, so
+  // the autosave effect can never write the previous user's cart into the new
+  // owner's key.
+  if (draftOwner !== userId) {
+    setDraftOwner(userId);
+    setItems(restoreDraft(draftsRepo));
+  }
+
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const itemsRef = useRef<QuoteItem[]>(items);
 

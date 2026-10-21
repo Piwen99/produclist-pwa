@@ -1,5 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createLocalDraftsRepo, DRAFT_STORAGE_KEY } from '../local/draftsRepo';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import {
+  clearDraftFor,
+  createLocalDraftsRepo,
+  DRAFT_STORAGE_KEY,
+  draftStorageKey,
+} from '../local/draftsRepo';
 import type { QuoteDraft } from '../../types/quote';
 import type { QuoteItem } from '../../types/quote';
 
@@ -113,5 +118,51 @@ describe('createLocalDraftsRepo', () => {
 
     expect(storage.getItem('custom:key')).not.toBeNull();
     expect(repo.load()).toEqual({ id: 'draft', ...DRAFT });
+  });
+
+  it('namespaces the key by user id so a draft never crosses accounts (issue #90)', () => {
+    createLocalDraftsRepo(undefined, draftStorageKey('user-a')).save(DRAFT);
+
+    expect(createLocalDraftsRepo(undefined, draftStorageKey('user-b')).load()).toBeNull();
+    expect(createLocalDraftsRepo(undefined, draftStorageKey('user-a')).load()).not.toBeNull();
+    expect(draftStorageKey('user-a')).not.toBe(DRAFT_STORAGE_KEY);
+  });
+
+  it('degrades to memory instead of throwing when the accessor is blocked (issue #90)', () => {
+    const accessor = vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
+      throw new Error('SecurityError: storage is blocked');
+    });
+
+    try {
+      const repo = createLocalDraftsRepo();
+      expect(() => repo.save(DRAFT)).not.toThrow();
+      expect(repo.load()).toEqual({ id: 'draft', ...DRAFT });
+      expect(() => repo.clear()).not.toThrow();
+      expect(repo.load()).toBeNull();
+    } finally {
+      accessor.mockRestore();
+    }
+  });
+
+  it('keeps working when a single storage operation throws', () => {
+    const storage = createMemoryStorage();
+    storage.getItem = () => {
+      throw new Error('read blocked');
+    };
+
+    const repo = createLocalDraftsRepo(storage, 'flaky:key');
+
+    expect(() => repo.save(DRAFT)).not.toThrow();
+    expect(repo.load()).toEqual({ id: 'draft', ...DRAFT });
+  });
+
+  it('clearDraftFor removes the user draft and the legacy device-wide key', () => {
+    createLocalDraftsRepo(undefined, draftStorageKey('user-a')).save(DRAFT);
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(DRAFT));
+
+    clearDraftFor('user-a');
+
+    expect(createLocalDraftsRepo(undefined, draftStorageKey('user-a')).load()).toBeNull();
+    expect(localStorage.getItem(DRAFT_STORAGE_KEY)).toBeNull();
   });
 });

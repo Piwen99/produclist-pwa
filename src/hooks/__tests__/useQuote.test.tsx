@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useQuote } from '../useQuote';
-import { createLocalDraftsRepo, DRAFT_STORAGE_KEY } from '../../data/local/draftsRepo';
+import { createLocalDraftsRepo, DRAFT_STORAGE_KEY, draftStorageKey } from '../../data/local/draftsRepo';
 import type { Product } from '../../types/product';
 import type { QuoteItem } from '../../types/quote';
 
@@ -432,6 +432,83 @@ describe('useQuote', () => {
       await waitFor(() => {
         expect(second.result.current.items[0]?.nombre).toBe('Castañas');
       });
+    });
+  });
+
+  describe('per-user draft scope (issue #90)', () => {
+    beforeEach(() => {
+      localStorage.clear();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      localStorage.clear();
+    });
+
+    it('never restores one user draft for another user on the same device', async () => {
+      const draftA: QuoteItem[] = [
+        { id: 'i-a', productId: 1, nombre: 'De A', formato: '10', cantidad: 1, precioKg: 100 },
+      ];
+      createLocalDraftsRepo(undefined, draftStorageKey('user-a')).save({
+        items: draftA,
+        totalNeto: 1000,
+        iva: 190,
+        total: 1190,
+      });
+
+      const otherUser = renderHook(() => useQuote('user-b'));
+      expect(otherUser.result.current.items).toEqual([]);
+      otherUser.unmount();
+
+      const owner = renderHook(() => useQuote('user-a'));
+      await waitFor(() => expect(owner.result.current.items[0]?.nombre).toBe('De A'));
+    });
+
+    it('reloads the draft when the signed-in user changes, without writing the old cart into the new key', async () => {
+      const draftB: QuoteItem[] = [
+        { id: 'i-b', productId: 2, nombre: 'De B', formato: '5', cantidad: 1, precioKg: 200 },
+      ];
+      createLocalDraftsRepo(undefined, draftStorageKey('user-b')).save({
+        items: draftB,
+        totalNeto: 1000,
+        iva: 190,
+        total: 1190,
+      });
+
+      const { result, rerender } = renderHook(
+        ({ userId }: { userId: string }) => useQuote(userId),
+        { initialProps: { userId: 'user-a' } },
+      );
+
+      act(() => {
+        result.current.addItem(createMockProduct({ id: 1, nombre: 'De A' }));
+      });
+
+      rerender({ userId: 'user-b' });
+
+      await waitFor(() => expect(result.current.items[0]?.nombre).toBe('De B'));
+      const storedB = createLocalDraftsRepo(undefined, draftStorageKey('user-b')).load();
+      expect(storedB?.items).toHaveLength(1);
+      expect(storedB?.items[0].nombre).toBe('De B');
+    });
+
+    it('does not crash when the localStorage accessor is blocked', () => {
+      const accessor = vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
+        throw new Error('SecurityError: storage is blocked');
+      });
+
+      try {
+        const { result } = renderHook(() => useQuote('user-a'));
+        expect(result.current.items).toEqual([]);
+
+        act(() => {
+          result.current.addItem(createMockProduct({ id: 1 }));
+        });
+
+        expect(result.current.items).toHaveLength(1);
+      } finally {
+        accessor.mockRestore();
+      }
     });
   });
 });

@@ -6,6 +6,8 @@ import { renderHook } from '@testing-library/react';
 // malformed cart, and mounting must not throw.
 vi.mock('../../data/local/draftsRepo', () => ({
   DRAFT_STORAGE_KEY: 'produclist:quoteDraft',
+  draftStorageKey: (userId?: string) =>
+    userId ? `produclist:quoteDraft:${userId}` : 'produclist:quoteDraft',
   createLocalDraftsRepo: () => ({
     load: () => ({ totalNeto: 1, iva: 0, total: 1 }),
     save: () => undefined,

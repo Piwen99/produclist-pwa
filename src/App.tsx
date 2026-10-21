@@ -5,6 +5,7 @@ import { useAddProduct } from './hooks/useAddProduct';
 import { useUpdateProduct } from './hooks/useUpdateProduct';
 import { useDeleteProduct } from './hooks/useDeleteProduct';
 import { useQuote } from './hooks/useQuote';
+import { clearDraftFor } from './data/local/draftsRepo';
 import { useToast } from './hooks/useToast';
 import { useAuth } from './auth/useAuth';
 import { ChangePasswordDialog } from './auth/ChangePasswordDialog';
@@ -51,7 +52,7 @@ function App() {
   const [clientNames, setClientNames] = useState<string[]>([]);
 
   // Cotizador state
-  const { items, addItem, removeItem, updateItemQty, updateItemPrecioKg, totals } = useQuote();
+  const { items, addItem, removeItem, updateItemQty, updateItemPrecioKg, clearAll, totals } = useQuote(userId);
 
   // Close mobile menu on outside click
   useEffect(() => {
@@ -152,10 +153,14 @@ function App() {
 
   const handleSignOut = useCallback(() => {
     setShowMobileMenu(false);
+    // The persisted cart must not survive the session that created it, and a
+    // second user on this device must start empty (issue #90).
+    clearDraftFor(userId);
+    clearAll();
     void signOut().catch((error: unknown) => {
       console.error('Error signing out:', error);
     });
-  }, [signOut]);
+  }, [signOut, userId, clearAll]);
 
   const handleOpenPasswordDialog = useCallback(() => {
     setShowMobileMenu(false);
