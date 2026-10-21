@@ -208,22 +208,103 @@ export function listSendSignature(send: ListSend): string {
   });
 }
 
-/** Validate one raw quote entry. Returns null when the shape is unusable. */
-function parseQuoteItem(raw: unknown): SavedQuote | null {
-  if (typeof raw !== 'object' || raw === null) return null;
+/** A finite, non-negative number: the only shape a money field may have. */
+function isFiniteNonNegative(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+/**
+ * Validate one quote line. Returns the typed item, or a message describing the
+ * first problem found.
+ *
+ * `formato` must be a Chilean number: an empty one prices the line at zero, and
+ * a non-string one makes `QuoteHistory` throw while rendering (issue #96).
+ */
+function parseQuoteLine(raw: unknown, index: number): QuoteItem | string {
+  const position = `Ítem ${index + 1}`;
+
+  if (typeof raw !== 'object' || raw === null) {
+    return `${position}: debe ser un objeto.`;
+  }
+
+  const item = raw as Record<string, unknown>;
+
+  if (typeof item.id !== 'string' || item.id.trim() === '') {
+    return `${position}: falta "id".`;
+  }
+  if (!isFiniteNonNegative(item.productId)) {
+    return `${position}: "productId" debe ser un número.`;
+  }
+  if (typeof item.nombre !== 'string' || item.nombre.trim() === '') {
+    return `${position}: "nombre" debe ser un texto.`;
+  }
+  if (typeof item.formato !== 'string' || !isValidChileanFormat(item.formato.trim())) {
+    return `${position}: "formato" debe ser un texto en formato chileno (ej: 11,34).`;
+  }
+  if (!isFiniteNonNegative(item.cantidad)) {
+    return `${position}: "cantidad" debe ser un número mayor o igual a 0.`;
+  }
+  if (!isFiniteNonNegative(item.precioKg)) {
+    return `${position}: "precioKg" debe ser un número mayor o igual a 0.`;
+  }
+
+  return {
+    id: item.id,
+    productId: item.productId,
+    nombre: item.nombre,
+    formato: item.formato.trim(),
+    cantidad: item.cantidad,
+    precioKg: item.precioKg,
+  };
+}
+
+/**
+ * Validate one raw quote entry. Returns a `SavedQuote` when the whole entry is
+ * usable, or an `ImportError` naming the first malformed field. A tampered or
+ * truncated backup must never be written as-is.
+ */
+function parseQuoteItem(raw: unknown): SavedQuote | ImportError {
+  if (typeof raw !== 'object' || raw === null) {
+    return { nombre: '(cotización)', error: 'Cada cotización debe ser un objeto.' };
+  }
 
   const quote = raw as Record<string, unknown>;
-  if (!Array.isArray(quote.items)) return null;
 
   const fecha = new Date(String(quote.fecha));
-  if (Number.isNaN(fecha.getTime())) return null;
+  if (Number.isNaN(fecha.getTime())) {
+    return { nombre: '(cotización)', error: 'La fecha de la cotización no es válida.' };
+  }
+  const label = quoteLabel({ fecha });
+
+  if (!Array.isArray(quote.items)) {
+    return { nombre: label, error: 'Los ítems de la cotización deben ser un arreglo.' };
+  }
+
+  const items: QuoteItem[] = [];
+  for (const [index, entry] of quote.items.entries()) {
+    const line = parseQuoteLine(entry, index);
+    if (typeof line === 'string') {
+      return { nombre: label, error: line };
+    }
+    items.push(line);
+  }
+
+  if (!isFiniteNonNegative(quote.totalNeto)) {
+    return { nombre: label, error: 'El total neto debe ser un número mayor o igual a 0.' };
+  }
+  if (!isFiniteNonNegative(quote.iva)) {
+    return { nombre: label, error: 'El IVA debe ser un número mayor o igual a 0.' };
+  }
+  if (!isFiniteNonNegative(quote.total)) {
+    return { nombre: label, error: 'El total debe ser un número mayor o igual a 0.' };
+  }
 
   return {
     fecha,
-    items: quote.items as QuoteItem[],
-    totalNeto: Number(quote.totalNeto) || 0,
-    iva: Number(quote.iva) || 0,
-    total: Number(quote.total) || 0,
+    items,
+    totalNeto: quote.totalNeto,
+    iva: quote.iva,
+    total: quote.total,
   };
 }
 
@@ -311,11 +392,17 @@ export function parseProductImport(text: string): {
   }
 
   const rawQuotes = isObject ? (data as Record<string, unknown>).quotes : undefined;
-  const quotes: SavedQuote[] = Array.isArray(rawQuotes)
-    ? rawQuotes
-        .map(parseQuoteItem)
-        .filter((quote): quote is SavedQuote => quote !== null)
-    : [];
+  const quotes: SavedQuote[] = [];
+  if (Array.isArray(rawQuotes)) {
+    for (const entry of rawQuotes) {
+      const parsed = parseQuoteItem(entry);
+      if ('error' in parsed) {
+        errors.push(parsed);
+      } else {
+        quotes.push(parsed);
+      }
+    }
+  }
 
   const rawListSends = isObject ? (data as Record<string, unknown>).listSends : undefined;
   const listSends: ListSend[] = Array.isArray(rawListSends)
