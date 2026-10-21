@@ -31,9 +31,9 @@ Test runner: `pnpm test` (vitest) + `pnpm exec playwright test` (e2e)
 
 | ID | Specs | Tarea | Ruta | Estado |
 |----|-------|-------|------|--------|
-| T1 | S1, S2 | #91: estado de error + reintento en `ClientPrices`, `QuoteHistory` y el catálogo; guard in-flight en `Cotizador` y `ProductForm`. | delegado (worker) | pendiente |
-| T2 | S3 | #97: persistir el dismissal del banner, separar banner y FAB, z-index explícito, e2e de no-intersección. | inline | pendiente |
-| T3 | S4 | #97: `pwa-512x512-maskable.png` + `purpose` en el manifest. | inline | pendiente |
+| T1 | S1, S2 | #91: estado de error + reintento en `ClientPrices`, `QuoteHistory` y el catálogo; guard in-flight en `Cotizador` y `ProductForm`. | delegado (worker) | ✅ `b4b688e` |
+| T2 | S3 | #97: persistir el dismissal del banner, separar banner y FAB, z-index explícito, e2e de no-intersección. | inline | ✅ `b6b5d83` |
+| T3 | S4 | #97: `pwa-512x512-maskable.png` + `purpose` en el manifest. | inline | ✅ `b6b5d83` |
 
 ## Log
 
@@ -41,3 +41,13 @@ Test runner: `pnpm test` (vitest) + `pnpm exec playwright test` (e2e)
 > Realiza los PRs correspondientes y despues sigue con Lane C
 
 **L2** — 2026-10-21 — PRs de los candidatos: #104 (#101, `cliente` en el import), #105 (#102, estabilidad de queries async). #103 (idempotencia de cotizaciones) queda como issue sin PR: hay una decisión de producto abierta (clave de intento vs huella de contenido).
+
+**L3** — 2026-10-21 — evidencia de verificación.
+- T1 delegado a un worker con superficies disjuntas. El primer despacho paró sin editar porque `App.tsx` y `ProductList.tsx` faltaban en la lista permitida: era un error de derivación del padre, no una decisión pendiente. Re-despachado con las rutas y la respuesta de producto (un refresh fallido con caché debe ofrecer reintento sin tapar el dato).
+- RED observado por el worker en las seis áreas: `Unhandled Rejection: Error: boom` dejando "Cargando…" en `ClientPrices`; el estado vacío en vez del error en `QuoteHistory`; `expected "create" to be called 1 times, but got 2 times` en `Cotizador`; `expected "vi.fn()" to be called 1 times, but got 2 times` en `ProductForm`; y los textos/botón de error ausentes en `ProductList` y `DataProvider`.
+- T2: RED propio en `InstallPrompt.test.tsx` (3 fallos: dismissal no persistido, dismissal previo ignorado, storage bloqueado). El e2e nuevo pasa en `iphone-se`.
+- Icono maskable generado sin tooling de imagen (script Node con zlib en `/tmp/opencode`, fuera del repo) y verificado visualmente: el arte entra en el círculo seguro.
+- Suite completa con el `test-setup` de `master`: **666 tests verdes**, 88.42% statements / 80.89% branches. `tsc -b` y `eslint .` limpios.
+- `tsc`/`lint` corridos por el worker y re-corridos por el padre sobre las siete suites tocadas (129 tests).
+- Residuales: `QuoteHistory` delete no tiene guard in-flight; un seed fallido en cuenta vacía puede mostrar "Sin productos" si la lectura siguiente devuelve cero filas.
+
