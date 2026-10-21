@@ -5,6 +5,9 @@ import { PDFButton } from './PDFButton';
 
 interface ProductListProps {
   products: Product[] | undefined;
+  /** True while the most recent catalog read has failed. */
+  loadError: boolean;
+  onRetry: () => Promise<void>;
   onUpdate: (id: number, changes: Partial<ProductInput>) => void;
   onDelete: (id: number) => void;
   onStartEdit: (product: Product) => void;
@@ -17,10 +20,12 @@ const CATEGORY_ORDER: Category[] = [
   'Legumbres',
 ];
 
-export function ProductList({ products, onUpdate, onDelete, onStartEdit }: ProductListProps) {
+export function ProductList({ products, loadError, onRetry, onUpdate, onDelete, onStartEdit }: ProductListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAvailableOnly, setShowAvailableOnly] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const retryingRef = useRef(false);
 
   // Filter products by name + availability
   const filteredProducts = useMemo(() => {
@@ -98,6 +103,52 @@ export function ProductList({ products, onUpdate, onDelete, onStartEdit }: Produ
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Re-entrancy guard: the ref flips synchronously, so a second click is ignored
+  // before React re-renders and disables the button (same pattern as ListSends).
+  const handleRetry = () => {
+    if (retryingRef.current) return;
+    retryingRef.current = true;
+    setIsRetrying(true);
+    void Promise.resolve()
+      .then(() => onRetry())
+      .catch((error: unknown) => {
+        console.error('Error retrying product catalog:', error);
+      })
+      .finally(() => {
+        retryingRef.current = false;
+        setIsRetrying(false);
+      });
+  };
+
+  const retryButton = (
+    <button
+      onClick={handleRetry}
+      disabled={isRetrying}
+      className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
+    >
+      {isRetrying ? 'Reintentando…' : 'Reintentar'}
+    </button>
+  );
+
+  // A failed refresh over a cached catalog stays non-blocking: the list keeps
+  // rendering and only this notice is added on top.
+  const refreshNotice = loadError ? (
+    <div className="flex flex-wrap items-center justify-between gap-3 mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20">
+      <p className="text-sm text-red-700 dark:text-red-300">No se pudo actualizar el catálogo</p>
+      {retryButton}
+    </div>
+  ) : null;
+
+  if (!products && loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+        <p className="text-gray-900 dark:text-white font-medium mb-1">No se pudo cargar el catálogo</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Revisá tu conexión e intentá de nuevo.</p>
+        {retryButton}
+      </div>
+    );
+  }
+
   if (!products) {
     return (
       <div className="p-6 sm:p-8 text-center">
@@ -115,33 +166,37 @@ export function ProductList({ products, onUpdate, onDelete, onStartEdit }: Produ
 
   if (!hasProducts) {
     return (
-      <div className="p-6 sm:p-8 text-center bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-12 w-12 mx-auto text-gray-400 mb-3"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={1.5}
-            d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-          />
-        </svg>
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">
-          Sin productos
-        </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
-          La base de datos está vacía. Los productos se cargarán automáticamente al iniciar la aplicación.
-        </p>
-      </div>
+      <>
+        {refreshNotice}
+        <div className="p-6 sm:p-8 text-center bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-12 w-12 mx-auto text-gray-400 mb-3"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={1.5}
+              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+            />
+          </svg>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">
+            Sin productos
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+            La base de datos está vacía. Los productos se cargarán automáticamente al iniciar la aplicación.
+          </p>
+        </div>
+      </>
     );
   }
 
   return (
     <div className="product-list">
+      {refreshNotice}
       {/* Search bar */}
       <div className="relative mb-4">
         <svg

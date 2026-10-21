@@ -133,21 +133,26 @@ function QuoteCard({ quote, onDelete, canDelete }: QuoteCardProps) {
 export function QuoteHistory() {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const retryingRef = useRef(false);
   const { repos, userId } = useData();
   const { toast } = useToast();
   // toast.error is memoized in ToastProvider; the toast container object is not.
   const showError = toast.error;
 
   const loadQuotes = useCallback(() => {
-    repos.quotes
+    return repos.quotes
       .listOwn(userId)
       .then((data) => {
         setQuotes(data);
+        setLoadError(false);
       })
       .catch((error: unknown) => {
         console.error('Error loading quotes:', error);
+        setLoadError(true);
         showError('Error al cargar las cotizaciones');
       })
       .finally(() => {
@@ -156,8 +161,26 @@ export function QuoteHistory() {
   }, [repos, userId, showError]);
 
   useEffect(() => {
-    loadQuotes();
+    void loadQuotes();
   }, [loadQuotes]);
+
+  // Re-entrancy guard: the ref flips synchronously, so a second click is ignored
+  // even before React re-renders and disables the button (same as ListSends).
+  const handleRetry = () => {
+    if (retryingRef.current) return;
+    retryingRef.current = true;
+    setIsRetrying(true);
+    void Promise.resolve()
+      .then(() => loadQuotes())
+      .catch((error: unknown) => {
+        console.error('Error retrying quotes:', error);
+        setLoadError(true);
+      })
+      .finally(() => {
+        retryingRef.current = false;
+        setIsRetrying(false);
+      });
+  };
 
   // Keyboard shortcut: Ctrl+/ or Cmd+/ to focus the client search
   useEffect(() => {
@@ -197,6 +220,29 @@ export function QuoteHistory() {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-gray-500 dark:text-gray-400">Cargando...</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Historial de Cotizaciones</h2>
+        <div className="flex flex-col items-center justify-center py-12 text-center bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+          <p className="text-gray-900 dark:text-white font-medium mb-1">
+            No se pudieron cargar las cotizaciones
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Revisá tu conexión e intentá de nuevo.
+          </p>
+          <button
+            onClick={handleRetry}
+            disabled={isRetrying}
+            className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isRetrying ? 'Reintentando…' : 'Reintentar'}
+          </button>
+        </div>
       </div>
     );
   }

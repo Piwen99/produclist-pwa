@@ -69,26 +69,46 @@ function buildClientDocuments(sends: ListSend[], quotes: SavedQuote[]): ClientDo
  */
 export function ClientPrices() {
   const [clients, setClients] = useState<string[]>([]);
+  const [clientsLoaded, setClientsLoaded] = useState(false);
+  const [clientsError, setClientsError] = useState(false);
   const [selected, setSelected] = useState('');
   const [entries, setEntries] = useState<ClientPriceEntry[]>([]);
   const [documents, setDocuments] = useState<ClientDocument[]>([]);
+  const [documentsError, setDocumentsError] = useState(false);
   const [loading, setLoading] = useState(true);
+  // Bumped by Reintentar so both reads run again.
+  const [reloadToken, setReloadToken] = useState(0);
   const { repos, userId } = useData();
 
   useEffect(() => {
+    let cancelled = false;
     void repos.clients
       .listNames(userId)
       .then((names) => {
+        if (cancelled) return;
         setClients(names);
+        setClientsLoaded(true);
+        setClientsError(false);
         setSelected((current) => current || names[0] || '');
       })
-      .catch(console.error);
-  }, [repos, userId]);
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        console.error('Error loading clients:', error);
+        setClientsError(true);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [repos, userId, reloadToken]);
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
+      // The client list decides what can be read: nothing is requested before it has loaded.
+      if (!clientsLoaded) return;
+
       if (!selected) {
         setEntries([]);
         setDocuments([]);
@@ -98,21 +118,30 @@ export function ClientPrices() {
 
       // Match client names case-insensitively: the stored casing is free text.
       const key = selected.trim().toLowerCase();
-      // Owner-scoped read: for an admin `list()` would also return every other
-      // owner's rows, leaking foreign documents into this client's history.
-      const [sends, quotes] = await Promise.all([
-        repos.listSends.listOwn(userId),
-        repos.quotes.listOwn(userId),
-      ]);
+      try {
+        // Owner-scoped read: for an admin `list()` would also return every other
+        // owner's rows, leaking foreign documents into this client's history.
+        const [sends, quotes] = await Promise.all([
+          repos.listSends.listOwn(userId),
+          repos.quotes.listOwn(userId),
+        ]);
 
-      if (!cancelled) {
-        const clientSends = sends.filter((send) => send.cliente.trim().toLowerCase() === key);
-        const clientQuotes = quotes.filter(
-          (quote) => quote.cliente?.trim().toLowerCase() === key
-        );
-        setEntries(buildClientPriceHistory(clientSends, clientQuotes));
-        setDocuments(buildClientDocuments(clientSends, clientQuotes));
-        setLoading(false);
+        if (!cancelled) {
+          const clientSends = sends.filter((send) => send.cliente.trim().toLowerCase() === key);
+          const clientQuotes = quotes.filter(
+            (quote) => quote.cliente?.trim().toLowerCase() === key
+          );
+          setEntries(buildClientPriceHistory(clientSends, clientQuotes));
+          setDocuments(buildClientDocuments(clientSends, clientQuotes));
+          setDocumentsError(false);
+          setLoading(false);
+        }
+      } catch (error: unknown) {
+        if (!cancelled) {
+          console.error('Error loading client documents:', error);
+          setDocumentsError(true);
+          setLoading(false);
+        }
       }
     };
 
@@ -120,9 +149,40 @@ export function ClientPrices() {
     return () => {
       cancelled = true;
     };
-  }, [repos, userId, selected]);
+  }, [repos, userId, selected, clientsLoaded, reloadToken]);
 
-  if (clients.length === 0 && !loading) {
+  // `loading` stays true for the whole retry, so the button is disabled and a
+  // second click is ignored until both reads settle.
+  const handleRetry = () => {
+    if (loading) return;
+    setLoading(true);
+    setReloadToken((token) => token + 1);
+  };
+
+  if (clientsError || documentsError) {
+    return (
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-3">Clientes</h2>
+        <div className="flex flex-col items-center justify-center py-12 text-center bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+          <p className="text-gray-900 dark:text-white font-medium mb-1">
+            No se pudo cargar el historial de clientes
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Revisá tu conexión e intentá de nuevo.
+          </p>
+          <button
+            onClick={handleRetry}
+            disabled={loading}
+            className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Reintentando…' : 'Reintentar'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (clientsLoaded && clients.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
         <p className="text-gray-500 dark:text-gray-400 text-sm">

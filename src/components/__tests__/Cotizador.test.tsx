@@ -167,6 +167,46 @@ describe('Cotizador', () => {
     expect(pdfButton).toBeDisabled();
   });
 
+  it('creates exactly one quote when Guardar cotización is double-clicked', async () => {
+    const items: QuoteItem[] = [
+      { id: 'item-1', productId: 1, nombre: 'Almendra', formato: '11,34', cantidad: 1, precioKg: 100 },
+    ];
+    const { repos } = renderCotizador(items, { totalKg: 11.34, subtotal: 1134, iva: 215, total: 1349 });
+    const createSpy = vi.spyOn(repos.quotes, 'create');
+
+    const save = screen.getByRole('button', { name: /guardar cotización/i });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => expect(save).toBeEnabled());
+    expect(await repos.quotes.listOwn('test-user')).toHaveLength(1);
+  });
+
+  it('warns and creates no quote when saving an empty cart', async () => {
+    const { repos } = renderCotizador();
+    const createSpy = vi.spyOn(repos.quotes, 'create');
+
+    fireEvent.click(screen.getByRole('button', { name: /guardar cotización/i }));
+
+    expect(await screen.findByText('Agregá productos antes de guardar')).toBeInTheDocument();
+    expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  it('disables Guardar cotización while the save is in flight', async () => {
+    const items: QuoteItem[] = [
+      { id: 'item-1', productId: 1, nombre: 'Almendra', formato: '11,34', cantidad: 1, precioKg: 100 },
+    ];
+    renderCotizador(items, { totalKg: 11.34, subtotal: 1134, iva: 215, total: 1349 });
+
+    const save = screen.getByRole('button', { name: /guardar cotización/i });
+    fireEvent.click(save);
+    expect(save).toBeDisabled();
+
+    await waitFor(() => expect(screen.getByText(/cotización guardada/i)).toBeInTheDocument());
+    await waitFor(() => expect(save).toBeEnabled());
+  });
+
   it('should render the PDF trigger disabled when there are no items', async () => {
     renderCotizador();
     const pdfButton = await screen.findByRole('button', { name: /exportar pdf/i });

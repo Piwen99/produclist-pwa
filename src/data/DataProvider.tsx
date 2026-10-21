@@ -42,6 +42,7 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 export function DataProvider({ repos, userId, children }: DataProviderProps) {
   const [cache] = useState(createProductsCache);
   const products = useProductsSnapshot(cache);
+  const [productsError, setProductsError] = useState(false);
   const refreshSeq = useRef(0);
 
   const refresh = useCallback(async () => {
@@ -56,8 +57,12 @@ export function DataProvider({ repos, userId, children }: DataProviderProps) {
       // Drop a stale response: only the latest in-flight refresh may write.
       if (requestId !== refreshSeq.current) return;
       cache.set(next);
+      setProductsError(false);
     } catch (error) {
       console.error('[DataProvider] Failed to refresh products', error);
+      // A stale failure must not flag a newer snapshot: only the latest refresh reports.
+      if (requestId !== refreshSeq.current) return;
+      setProductsError(true);
     }
   }, [repos, cache, userId]);
 
@@ -120,8 +125,17 @@ export function DataProvider({ repos, userId, children }: DataProviderProps) {
   );
 
   const value = useMemo<DataContextValue>(
-    () => ({ products, repos, userId, refresh, addProduct, updateProduct, deleteProduct }),
-    [products, repos, userId, refresh, addProduct, updateProduct, deleteProduct],
+    () => ({
+      products,
+      productsError,
+      repos,
+      userId,
+      refresh,
+      addProduct,
+      updateProduct,
+      deleteProduct,
+    }),
+    [products, productsError, repos, userId, refresh, addProduct, updateProduct, deleteProduct],
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

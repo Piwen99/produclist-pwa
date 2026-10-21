@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { QuoteItem } from './QuoteItem';
 import { QuoteProductSelector } from './QuoteProductSelector';
 import { QuoteShareButton } from './QuoteShareButton';
@@ -32,6 +32,8 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
   const [showSelector, setShowSelector] = useState(false);
   const [cliente, setCliente] = useState('');
   const [clients, setClients] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const { repos, userId } = useData();
   const { toast } = useToast();
 
@@ -45,6 +47,9 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
   }, [repos, userId]);
 
   const handleSave = async () => {
+    // Re-entrancy guard: the ref flips synchronously, so a second click is ignored
+    // before React re-renders and disables the button (same as ListSends).
+    if (savingRef.current) return;
     if (items.length === 0) {
       toast.warning('Agregá productos antes de guardar');
       return;
@@ -53,6 +58,8 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
       toast.warning(`Corregí el formato de: ${unpriceable.map((item) => item.nombre).join(', ')}`);
       return;
     }
+    savingRef.current = true;
+    setSaving(true);
     try {
       const trimmed = cliente.trim();
       await repos.quotes.create({
@@ -66,6 +73,9 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
     } catch (error) {
       console.error('Error saving quote:', error);
       toast.error('Error al guardar la cotización');
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
     }
   };
 
@@ -201,7 +211,8 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
       <div className="mt-2">
         <button
           onClick={() => { void handleSave(); }}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors touch-manipulation"
+          disabled={saving}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />

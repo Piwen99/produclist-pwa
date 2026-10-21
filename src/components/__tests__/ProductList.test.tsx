@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ProductList } from '../ProductList';
 import type { Product } from '../../types/product';
@@ -22,10 +22,15 @@ const handlers = {
   onStartEdit: vi.fn(),
 };
 
-function renderList(products?: Product[] | undefined) {
+function renderList(
+  products?: Product[] | undefined,
+  options: { loadError?: boolean; onRetry?: () => Promise<void> } = {},
+) {
   return render(
     <ProductList
       products={products}
+      loadError={options.loadError ?? false}
+      onRetry={options.onRetry ?? vi.fn().mockResolvedValue(undefined)}
       onUpdate={handlers.onUpdate}
       onDelete={handlers.onDelete}
       onStartEdit={handlers.onStartEdit}
@@ -52,6 +57,61 @@ describe('ProductList — loading state', () => {
     renderList(undefined);
     expect(screen.getByText('Cargando productos...')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /eliminar/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('ProductList — load errors', () => {
+  it('shows a retryable error state instead of the loading skeleton when the first load fails', () => {
+    renderList(undefined, { loadError: true });
+    expect(screen.getByText('No se pudo cargar el catálogo')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^reintentar$/i })).toBeEnabled();
+    expect(screen.queryByText('Cargando productos...')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sin productos')).not.toBeInTheDocument();
+  });
+
+  it('re-runs the load when Reintentar is clicked', async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn().mockResolvedValue(undefined);
+    renderList(undefined, { loadError: true, onRetry });
+
+    await user.click(screen.getByRole('button', { name: /^reintentar$/i }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start a second retry while one is in flight', async () => {
+    const user = userEvent.setup();
+    let finish!: () => void;
+    const onRetry = vi.fn(
+      () => new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    renderList(undefined, { loadError: true, onRetry });
+
+    await user.click(screen.getByRole('button', { name: /^reintentar$/i }));
+    const busy = screen.getByRole('button', { name: /reintentando/i });
+    expect(busy).toBeDisabled();
+    fireEvent.click(busy);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    finish();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^reintentar$/i })).toBeEnabled(),
+    );
+  });
+
+  it('keeps the cached catalog visible and offers a retry when a refresh fails', async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn().mockResolvedValue(undefined);
+    renderList(mockProducts, { loadError: true, onRetry });
+
+    expect(screen.getByText('No se pudo actualizar el catálogo')).toBeInTheDocument();
+    expect(screen.getByText('Frutos Secos')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+    expect(screen.queryByText('Cargando productos...')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^reintentar$/i }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
   });
 });
 

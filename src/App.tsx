@@ -32,7 +32,7 @@ function App() {
   const { remove } = useDeleteProduct();
   const { toast } = useToast();
   const { signOut, changePassword } = useAuth();
-  const { repos, userId } = useData();
+  const { repos, userId, productsError, refresh } = useData();
   // Creating a product only makes sense on the catalog route.
   const isProductos = useLocation().pathname === '/';
 
@@ -402,6 +402,8 @@ function App() {
           <Route index element={
             <ProductList
               products={products}
+              loadError={productsError}
+              onRetry={refresh}
               onUpdate={(id, changes) => { void handleUpdateProduct(id, changes); }}
               onDelete={(id) => { void handleDeleteProduct(id); }}
               onStartEdit={handleEditProduct}
@@ -429,7 +431,7 @@ function App() {
       {/* Product Form - Create Modal */}
       {showForm && (
         <ProductForm
-          onSubmit={(data) => { void handleSubmitProduct(data); }}
+          onSubmit={handleSubmitProduct}
           onCancel={handleCloseForm}
         />
       )}
@@ -438,7 +440,7 @@ function App() {
       {editingProduct && (
         <ProductForm
           product={editingProduct}
-          onSubmit={(data) => { void handleSaveEdit(data); }}
+          onSubmit={handleSaveEdit}
           onCancel={handleCloseEdit}
         />
       )}
