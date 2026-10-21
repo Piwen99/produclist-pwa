@@ -52,7 +52,12 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
       newErrors.precioNeto = 'El precio no puede ser negativo';
     }
 
-    if (formData.formato && !isValidChileanFormat(formData.formato)) {
+    // Issue #94: an empty format is not a cosmetic gap. It priced the quote line
+    // at 0 kg and $0 while the client document showed a real product name.
+    const formato = formData.formato.trim();
+    if (!formato) {
+      newErrors.formato = 'El formato es obligatorio';
+    } else if (!isValidChileanFormat(formato)) {
       newErrors.formato = 'Formato inválido. Use formato chileno (ej: 11,34)';
     }
 
@@ -63,7 +68,7 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
   const handleSubmit = useCallback((e: React.SyntheticEvent) => {
     e.preventDefault();
     if (validate()) {
-      onSubmit(formData);
+      onSubmit({ ...formData, formato: formData.formato.trim() });
     }
   }, [formData, onSubmit, validate]);
 
@@ -146,7 +151,7 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
             {/* Formato */}
             <div>
               <label htmlFor="formato" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Formato (kg)
+                Formato (kg) <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"

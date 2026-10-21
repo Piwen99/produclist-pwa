@@ -126,7 +126,7 @@ describe('ProductForm — create mode', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('does not validate formato when campo formato is empty', async () => {
+  it('requires a formato on submit (issue #94: an empty format priced the line at $0)', async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderForm();
 
@@ -137,7 +137,24 @@ describe('ProductForm — create mode', () => {
     await user.type(precioInput, '5000');
     await user.click(screen.getByRole('button', { name: 'Crear Producto' }));
 
-    expect(onSubmit).toHaveBeenCalled();
+    expect(screen.getByText('El formato es obligatorio')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('rejects a whitespace-only formato', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderForm();
+
+    await user.type(screen.getByLabelText(/nombre/i), 'Test');
+    await user.selectOptions(screen.getByLabelText(/categoría/i), 'Legumbres');
+    await user.type(screen.getByLabelText(/formato/i), '   ');
+    const precioInput = screen.getByLabelText(/precio neto/i);
+    await user.clear(precioInput);
+    await user.type(precioInput, '5000');
+    await user.click(screen.getByRole('button', { name: 'Crear Producto' }));
+
+    expect(screen.getByText('El formato es obligatorio')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('blocks submit with a validation error when precioNeto is cleared (empty, not 0)', async () => {

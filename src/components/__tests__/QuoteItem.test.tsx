@@ -50,6 +50,26 @@ describe('QuoteItem', () => {
     expect(screen.getByText(/\$850\.500/)).toBeInTheDocument();
   });
 
+  it('marks a line without a format instead of pricing it at $0 (issue #94)', () => {
+    render(<QuoteItem item={{ ...mockItem, formato: '' }} {...handlers} />);
+
+    expect(screen.getByText('Sin formato')).toBeInTheDocument();
+    // A $0 here would look like a real amount to the seller and the client.
+    expect(screen.queryByText(/\$0/)).not.toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('rounds each line to whole pesos (issue #95)', () => {
+    render(
+      <QuoteItem
+        item={{ ...mockItem, formato: '11,33', cantidad: 1, precioKg: 1001 }}
+        {...handlers}
+      />,
+    );
+
+    expect(screen.getByText('$11.341')).toBeInTheDocument();
+  });
+
   it('should call onUpdateQty when cantidad changes', () => {
     render(<QuoteItem item={mockItem} {...handlers} />);
     const input = screen.getByLabelText('Cantidad');

@@ -60,7 +60,13 @@ export function QuoteItem({ item, onUpdateQty, onUpdatePrecioKg, onRemove }: Quo
             {item.nombre}
           </span>
           <span className="text-xs text-gray-500 dark:text-gray-400">
-            {item.formato} kg
+            {subtotal === null ? (
+              <span className="inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+                Sin formato
+              </span>
+            ) : (
+              `${item.formato} kg`
+            )}
           </span>
         </div>
       </div>

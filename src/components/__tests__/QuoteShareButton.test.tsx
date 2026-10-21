@@ -65,6 +65,18 @@ describe('QuoteShareButton', () => {
     expect(copiedText).toContain('$13.495'); // Total formatted with es-CL thousands separator
   });
 
+  it('marks a line without a format instead of copying $NaN or $0', async () => {
+    const items: QuoteItem[] = [
+      { id: 'item-1', productId: 1, nombre: 'Sin formato', formato: '', cantidad: 2, precioKg: 500 },
+    ];
+    render(<QuoteShareButton items={items} totals={{ totalKg: 0, subtotal: 0, iva: 0, total: 0 }} />);
+    fireEvent.click(screen.getByRole('button', { name: /copiar cotización/i }));
+
+    const copiedText = clipboardMock.writeText.mock.calls[0][0];
+    expect(copiedText).toContain('sin formato');
+    expect(copiedText).not.toContain('NaN');
+  });
+
   it('should disable button when items is empty', () => {
     render(<QuoteShareButton items={[]} totals={{ totalKg: 0, subtotal: 0, iva: 0, total: 0 }} />);
     const button = screen.getByRole('button', { name: /copiar cotización/i });
