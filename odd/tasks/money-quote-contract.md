@@ -71,8 +71,11 @@ Se acepta el formato de backup válido tal cual: no se exige consistencia entre 
 - `draftsRepo`: clave por usuario, `clearDraftFor`, acceso bloqueado y operación suelta que falla → degradación a memoria sin excepción.
 - Sign-out: test de integración en `App.nav.test.tsx`; se verificó el RED quitando la llamada a `clearDraftFor` en `App.tsx` (la clave sobrevive) y restaurándola.
 - `exportImport`: 7 tests nuevos (total no numérico, precio no numérico, `cantidad` faltante, `formato` numérico, `formato` vacío, precio negativo, preview + apply no escriben la entrada mala). RED observado en los 7.
-- Suite completa: 667 tests verdes, `tsc -b` limpio, `eslint .` limpio.
+- Suite completa: **675 tests verdes** (64 archivos), `tsc -b` limpio, `eslint .` limpio.
 - No verificado: la migración SQL no se aplicó contra un Postgres real (no hay stack local en esta sesión). Queda cubierta por #92.
 
 **L5** — 2026-10-21 — hallazgo fuera de alcance, no corregido: `parseQuoteItem` (antes y ahora) **descarta `cliente`** al importar, así que un backup restaurado pierde el nombre del cliente de cada cotización. No entra en #96; candidato a issue propio.
+
+**L6** — 2026-10-21 — entrega. La lane sumó 1.049 líneas cambiadas (963+/86−, ~480 son tests). Supera el presupuesto de review de 400: se entrega como **cadena de 2 PRs**, `#95+#94` primero y `#90+#96` encima (comparten `useQuote.ts`). Push y apertura quedan a decisión del usuario.
+
 
