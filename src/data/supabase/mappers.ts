@@ -55,6 +55,22 @@ export function isUniqueViolation(error: PostgrestErrorLike | null | undefined):
   return error?.code === '23505';
 }
 
+/** Name of the idempotency index added by the #103 migration. */
+export const QUOTE_IDEMPOTENCY_CONSTRAINT = 'cotizaciones_owner_client_id_key';
+
+/**
+ * A retried save hit the idempotency index: the same attempt already landed.
+ * That is a success for the caller, not a database error (issue #103).
+ */
+export function isQuoteIdempotencyConflict(
+  error: PostgrestErrorLike | null | undefined,
+): boolean {
+  return (
+    isUniqueViolation(error) &&
+    (error?.message ?? '').includes(QUOTE_IDEMPOTENCY_CONSTRAINT)
+  );
+}
+
 export function duplicateProductMessage(nombre: string): string {
   return `Ya existe un producto llamado "${nombre}"`;
 }
@@ -97,6 +113,7 @@ export function quoteInputToInsert(input: QuoteInput, ownerId?: string): QuoteIn
     total_neto: input.totalNeto,
     iva: input.iva,
     total: input.total,
+    ...(input.clientId === undefined ? {} : { client_id: input.clientId }),
     ...(ownerId === undefined ? {} : { owner_id: ownerId }),
   };
 }

@@ -1,6 +1,7 @@
 import type { QuotesRepo } from '../ports';
 import {
   assertRowAffected,
+  isQuoteIdempotencyConflict,
   mapPostgrestError,
   quoteInputToInsert,
   rowToSavedQuote,
@@ -64,7 +65,21 @@ export function createQuotesRepo(client: QuotesClient): QuotesRepo {
         .insert(quoteInputToInsert(data))
         .select()
         .single();
-      if (error) throw mapPostgrestError(error);
+      if (error) {
+        if (isQuoteIdempotencyConflict(error)) {
+          // The same attempt already landed (a retry, or a lost response). The
+          // caller asked for this quote and it exists: report it, not an error.
+          return {
+            fecha: data.fecha ?? new Date(),
+            cliente: data.cliente,
+            items: data.items,
+            totalNeto: data.totalNeto,
+            iva: data.iva,
+            total: data.total,
+          };
+        }
+        throw mapPostgrestError(error);
+      }
       return rowToSavedQuote(row as QuoteRow);
     },
 

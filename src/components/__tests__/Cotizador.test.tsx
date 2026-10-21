@@ -207,6 +207,51 @@ describe('Cotizador', () => {
     await waitFor(() => expect(save).toBeEnabled());
   });
 
+  it('reuses the idempotency key when a failed save is retried (issue #103)', async () => {
+    const items: QuoteItem[] = [
+      { id: 'item-1', productId: 1, nombre: 'Almendra', formato: '11,34', cantidad: 1, precioKg: 100 },
+    ];
+    const { repos } = renderCotizador(items, { totalKg: 11.34, subtotal: 1134, iva: 215, total: 1349 });
+    const create = vi.spyOn(repos.quotes, 'create').mockRejectedValueOnce(new Error('network'));
+
+    fireEvent.click(screen.getByRole('button', { name: /guardar cotización/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/error al guardar la cotización/i)).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /guardar cotización/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/cotización guardada/i)).toBeInTheDocument(),
+    );
+
+    expect(create).toHaveBeenCalledTimes(2);
+    const first = create.mock.calls[0][0] as { clientId?: string };
+    const retried = create.mock.calls[1][0] as { clientId?: string };
+    expect(first.clientId).toBeDefined();
+    expect(retried.clientId).toBe(first.clientId);
+  });
+
+  it('uses a fresh idempotency key for a new deliberate save (issue #103)', async () => {
+    const items: QuoteItem[] = [
+      { id: 'item-1', productId: 1, nombre: 'Almendra', formato: '11,34', cantidad: 1, precioKg: 100 },
+    ];
+    const { repos } = renderCotizador(items, { totalKg: 11.34, subtotal: 1134, iva: 215, total: 1349 });
+    const create = vi.spyOn(repos.quotes, 'create');
+
+    fireEvent.click(screen.getByRole('button', { name: /guardar cotización/i }));
+    await waitFor(() =>
+      expect(screen.getByText(/cotización guardada/i)).toBeInTheDocument(),
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /guardar cotización/i }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+
+    const first = create.mock.calls[0][0] as { clientId?: string };
+    const second = create.mock.calls[1][0] as { clientId?: string };
+    expect(first.clientId).toBeDefined();
+    expect(second.clientId).not.toBe(first.clientId);
+  });
+
   it('should render the PDF trigger disabled when there are no items', async () => {
     renderCotizador();
     const pdfButton = await screen.findByRole('button', { name: /exportar pdf/i });

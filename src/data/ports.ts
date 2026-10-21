@@ -40,7 +40,15 @@ export interface Repositories {
 }
 
 /** Quote payload for creation: `id`/`fecha` are database/default provided. */
-export type QuoteInput = Omit<SavedQuote, 'id' | 'fecha'> & { fecha?: Date };
+export type QuoteInput = Omit<SavedQuote, 'id' | 'fecha'> & {
+  fecha?: Date;
+  /**
+   * Idempotency key of one save attempt (issue #103). A retry that reuses it
+   * cannot create a second row: the database rejects the duplicate and the
+   * adapter reports it as success.
+   */
+  clientId?: string;
+};
 
 export interface QuotesRepo {
   /**

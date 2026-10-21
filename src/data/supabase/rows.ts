@@ -37,6 +37,8 @@ export interface QuoteRow {
   total: number;
   owner_id: string;
   created_at: string;
+  /** Absent on rows read before the #103 migration is applied. */
+  client_id?: string | null;
 }
 
 /** Insert payload for `public.cotizaciones`; `owner_id` defaults to auth.uid(). */
@@ -48,6 +50,8 @@ export interface QuoteInsert {
   iva: number;
   total: number;
   owner_id?: string;
+  /** Idempotency key of one save attempt (issue #103). */
+  client_id?: string;
 }
 
 /** Snake_case shape of the `public.listas_enviadas` table. */

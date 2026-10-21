@@ -251,6 +251,42 @@ describe('createInMemoryQuotesRepo', () => {
     await expect(repo.remove(1)).rejects.toBeInstanceOf(OwnershipError);
     await expect(repo.remove(999)).rejects.toBeInstanceOf(OwnershipError);
   });
+
+  it('dedupes by idempotency key so a retried save is one row (issue #103)', async () => {
+    const repo = createInMemoryQuotesRepo(VENDOR);
+    const attempt = {
+      fecha: new Date('2026-09-01'),
+      cliente: 'X',
+      items: [],
+      totalNeto: 1,
+      iva: 0,
+      total: 1,
+      clientId: 'attempt-1',
+    };
+
+    const first = await repo.create(attempt);
+    const retried = await repo.create(attempt);
+
+    expect(retried.id).toBe(first.id);
+    expect(await repo.listOwn('vendor-a')).toHaveLength(1);
+  });
+
+  it('keeps two deliberate saves with different keys as two rows (issue #103)', async () => {
+    const repo = createInMemoryQuotesRepo(VENDOR);
+    const base = {
+      fecha: new Date('2026-09-01'),
+      cliente: 'X',
+      items: [],
+      totalNeto: 1,
+      iva: 0,
+      total: 1,
+    };
+
+    await repo.create({ ...base, clientId: 'attempt-1' });
+    await repo.create({ ...base, clientId: 'attempt-2' });
+
+    expect(await repo.listOwn('vendor-a')).toHaveLength(2);
+  });
 });
 
 describe('createInMemoryListSendsRepo', () => {
