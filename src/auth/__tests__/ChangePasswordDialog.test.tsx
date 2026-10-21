@@ -177,7 +177,7 @@ describe('ChangePasswordDialog', () => {
     // the gate can unmount the dialog (session change, route change).
     first.unmount();
 
-    render(<ChangePasswordDialog onClose={onClose} onSubmit={onSubmit} />);
+    const second = render(<ChangePasswordDialog onClose={onClose} onSubmit={onSubmit} />);
 
     expect(screen.getByLabelText('Contraseña actual')).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Cambiar contraseña' })).toBeEnabled();
@@ -186,15 +186,14 @@ describe('ChangePasswordDialog', () => {
     fireEvent.submit(form as HTMLFormElement);
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
+    second.unmount();
   });
 
-  it('never submits an empty current password through a direct form submit', async () => {
-    const user = userEvent.setup();
+  it('never submits an empty current password through a direct form submit', () => {
     const { onSubmit } = renderDialog();
 
-    await user.type(screen.getByLabelText('Nueva contraseña'), 'new-secret-1');
-    await user.type(screen.getByLabelText('Repetir nueva contraseña'), 'new-secret-1');
-
+    // A pristine form hits the current-password guard first: no typing state to
+    // race against, so the assertion pins the guard order deterministically.
     const form = screen.getByRole('dialog').querySelector('form');
     expect(form).not.toBeNull();
     fireEvent.submit(form as HTMLFormElement);
