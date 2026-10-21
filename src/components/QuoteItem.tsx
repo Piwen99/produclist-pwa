@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import type { QuoteItem as QuoteItemType } from '../types/quote';
-import { parseChileanNumber } from '../utils/price';
+import { formatCurrency } from '../utils/price';
+import { lineSubtotal } from '../utils/quoteMath';
 
 interface QuoteItemProps {
   item: QuoteItemType;
@@ -10,17 +11,9 @@ interface QuoteItemProps {
 }
 
 export function QuoteItem({ item, onUpdateQty, onUpdatePrecioKg, onRemove }: QuoteItemProps) {
-  const totalKg = parseChileanNumber(item.formato) * item.cantidad;
-  const subtotal = totalKg * item.precioKg;
-
-  const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('es-CL', {
-      style: 'currency',
-      currency: 'CLP',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
+  // null when the format cannot be priced: the UI shows an explicit dash
+  // instead of a $0 that looks like a real amount (issue #94).
+  const subtotal = lineSubtotal(item);
 
   const qtyInputId = `qty-${item.id}`;
   const precioInputId = `precio-${item.id}`;
@@ -113,7 +106,9 @@ export function QuoteItem({ item, onUpdateQty, onUpdatePrecioKg, onRemove }: Quo
             Subtotal
           </span>
           <span className="text-sm font-semibold text-gray-900 dark:text-white whitespace-nowrap">
-            {formatCurrency(subtotal).replace('CLP', '').trim()}
+            {subtotal === null
+              ? '—'
+              : formatCurrency(subtotal).replace('CLP', '').trim()}
           </span>
         </div>
 

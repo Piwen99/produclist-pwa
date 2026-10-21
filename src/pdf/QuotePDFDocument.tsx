@@ -1,6 +1,7 @@
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import type { QuoteItem, QuoteTotals } from '../types/quote';
-import { formatCurrency, tryParseChileanNumber } from '../utils/price';
+import { formatCurrency } from '../utils/price';
+import { lineSubtotal } from '../utils/quoteMath';
 
 // ------------------------------------------------------------------
 // Styles — same olive palette as the product price list PDF
@@ -219,9 +220,9 @@ function formatKg(value: number): string {
   return `${value.toFixed(2).replace('.', ',')} kg`;
 }
 
-function itemSubtotal(item: QuoteItem): number {
-  const kg = (tryParseChileanNumber(item.formato) ?? 0) * item.cantidad;
-  return kg * item.precioKg;
+function itemSubtotalLabel(item: QuoteItem): string {
+  const amount = lineSubtotal(item);
+  return amount === null ? '—' : formatCurrency(amount);
 }
 
 // ------------------------------------------------------------------
@@ -268,7 +269,7 @@ function QuoteRow({ item, index }: { item: QuoteItem; index: number }) {
         <Text style={styles.cellTextRight}>{formatCurrency(item.precioKg)}</Text>
       </View>
       <View style={[styles.cellLast, styles.colSubtotal]}>
-        <Text style={styles.cellBoldRight}>{formatCurrency(itemSubtotal(item))}</Text>
+        <Text style={styles.cellBoldRight}>{itemSubtotalLabel(item)}</Text>
       </View>
     </View>
   );

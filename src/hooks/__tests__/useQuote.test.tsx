@@ -246,6 +246,30 @@ describe('useQuote', () => {
       expect(result.current.totals.total).toBe(25395);
     });
 
+    it('sums the rounded line amounts so the printed lines add up (issue #95)', () => {
+      // Two lines of 11,33 kg × $1001 print $11.341 each. The subtotal must be
+      // $22.682, not the $22.683 obtained by rounding the raw sum.
+      const { result } = renderHook(() => useQuote());
+
+      act(() => {
+        result.current.addItem(createMockProduct({ id: 1, formato: '11,33' }));
+        result.current.addItem(createMockProduct({ id: 2, formato: '11,33' }));
+      });
+
+      const firstId = result.current.items[0].id;
+      const secondId = result.current.items[1].id;
+      act(() => {
+        result.current.updateItemQty(firstId, 1);
+        result.current.updateItemPrecioKg(firstId, 1001);
+        result.current.updateItemQty(secondId, 1);
+        result.current.updateItemPrecioKg(secondId, 1001);
+      });
+
+      expect(result.current.totals.subtotal).toBe(22682);
+      expect(result.current.totals.iva).toBe(4310);
+      expect(result.current.totals.total).toBe(26992);
+    });
+
     it('should return zero totals for empty cart', () => {
       const { result } = renderHook(() => useQuote());
 

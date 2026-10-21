@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { QuoteItem, QuoteTotals } from '../types/quote';
 import type { Product } from '../types/product';
-import { tryParseChileanNumber } from '../utils/price';
+import { computeQuoteTotals } from '../utils/quoteMath';
 import { createLocalDraftsRepo } from '../data/local/draftsRepo';
 
 interface UseQuoteReturn {
@@ -32,24 +32,11 @@ export function useQuote(): UseQuoteReturn {
     itemsRef.current = items;
   }, [items]);
 
-  // ── Autosave con debounce: cada mutación persiste el borrador ──
-  const totals = useMemo<QuoteTotals>(() => {
-    let totalKg = 0;
-    let subtotal = 0;
-
-    for (const item of items) {
-      // Formato inválido → no contribuye al total (null), en vez de un 0
-      // silencioso que confundía "0 real" con "inválido" (fix 24-ago-2026).
-      const itemKg = (tryParseChileanNumber(item.formato) ?? 0) * item.cantidad;
-      totalKg += itemKg;
-      subtotal += itemKg * item.precioKg;
-    }
-
-    const iva = Math.round(subtotal * 0.19);
-    const total = subtotal + iva;
-
-    return { totalKg, subtotal, iva, total };
-  }, [items]);
+  // ── Totales: una sola implementación (utils/quoteMath) ──
+  // Cada línea se redondea al peso y el subtotal suma las líneas redondeadas,
+  // para que el documento del cliente cuadre. Un formato inválido no aporta un
+  // 0 silencioso: la línea se excluye y se marca como inválida en la UI.
+  const totals = useMemo<QuoteTotals>(() => computeQuoteTotals(items), [items]);
 
   useEffect(() => {
     if (saveTimer.current) {

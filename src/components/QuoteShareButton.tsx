@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { QuoteItem, QuoteTotals } from '../types/quote';
+import { lineSubtotal } from '../utils/quoteMath';
 
 interface QuoteShareButtonProps {
   items: QuoteItem[];
@@ -21,10 +22,13 @@ function formatQuoteText(items: QuoteItem[], totals: QuoteTotals): string {
   lines.push('────────────────────');
 
   for (const item of items) {
-    const itemKg = parseFloat(item.formato.replace(',', '.')) * item.cantidad;
-    const subtotal = itemKg * item.precioKg;
+    const subtotal = lineSubtotal(item);
     lines.push(item.nombre);
-    lines.push(`  ${item.formato} kg × ${String(item.cantidad)} @ ${clpFormatter.format(item.precioKg)}/kg  →  ${clpFormatter.format(subtotal)}`);
+    lines.push(
+      `  ${item.formato} kg × ${String(item.cantidad)} @ ${clpFormatter.format(item.precioKg)}/kg  →  ${
+        subtotal === null ? 'sin formato' : clpFormatter.format(subtotal)
+      }`,
+    );
     lines.push('');
   }
 
