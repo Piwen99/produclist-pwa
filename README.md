@@ -1,6 +1,6 @@
 # Produclist — Lista de Precios PWA
 
-PWA para gestionar una lista editable de precios de productos alimenticios, armar cotizaciones y registrar el último precio enviado a cada cliente. Ahora es **server-first sobre Supabase** (Postgres + Auth + RLS): cada fila pertenece a su dueño y el admin tiene una vista global aditiva de solo lectura. El modo offline ya **no** está soportado (trade-off aceptado).
+PWA para gestionar una lista editable de precios de productos alimenticios, armar cotizaciones y registrar el último precio enviado a cada cliente. Ahora es **server-first sobre Supabase** (Postgres + Auth + RLS): cada fila pertenece a su dueño y **sólo su dueño puede leerla**. El modo offline ya **no** está soportado (trade-off aceptado).
 
 ## Puesta en marcha
 
@@ -33,18 +33,27 @@ Tablas: `productos`, `cotizaciones`, `listas_enviadas`, `perfiles`.
 
 La seguridad se aplica en un único punto: **RLS**.
 
-- Lectura: `owner_id = auth.uid() OR is_admin(auth.uid())`.
+- Lectura de datos (`productos`, `cotizaciones`, `listas_enviadas`): sólo `owner_id = auth.uid()`.
 - Escritura: requiere `owner_id = auth.uid()`.
+- `perfiles`: `id = auth.uid() OR is_admin(auth.uid())` — el admin lee los perfiles, no los documentos de otros vendedores.
 - `is_admin()` es un helper no recursivo `SECURITY DEFINER` (evita el error 42P17 de recursión en la policy de `perfiles`).
 
-El admin ve las filas de todos los dueños en modo lectura, pero solo puede editar las propias.
+El admin **no** ve los datos de otros vendedores: las tres tablas de datos son owner-only en lectura y en escritura. La lectura cruzada quedó reservada para `perfiles`, que es la superficie prevista para el reporte de ventas ACH que todavía no está implementado.
+
+> Este modelo cambió con la migración `20261014000000_vendor_data_private.sql`. Antes, la policy de lectura de las tres tablas de datos era `owner_id = auth.uid() OR is_admin(auth.uid())` y el admin las leía en modo lectura. Ver "Base de datos y migraciones".
 
 ## Base de datos y migraciones
 
 | Entorno | Comandos |
 |---------|----------|
-| Local | `supabase start` y luego `supabase db reset` (aplica `supabase/migrations/20261005000000_init.sql`). |
+| Local | `supabase start` y luego `supabase db reset` (aplica las tres migraciones de `supabase/migrations/`, en orden). |
 | Remoto / linkeado | `supabase link --project-ref <project-ref>` y luego `pnpm db:push`. |
+
+| Migración | Qué aplica |
+|-----------|------------|
+| `20261005000000_init.sql` | Tablas, RLS inicial, grants de mínimo privilegio y el trigger `on_auth_user_created` que crea el perfil. |
+| `20261009000000_perfiles_least_privilege.sql` | Revoca `INSERT`/`UPDATE`/`DELETE` sobre `perfiles`: `authenticated` conserva sólo `SELECT`. |
+| `20261014000000_vendor_data_private.sql` | Deja la lectura de `productos`, `cotizaciones` y `listas_enviadas` en owner-only. Antes el admin las leía. |
 
 No hay seed SQL (`[db.seed] enabled=false`): los 44 productos base se siembran por usuario en runtime desde la app.
 
@@ -174,7 +183,10 @@ produclist/
 ├── supabase/
 │   ├── config.toml
 │   ├── project-refs.json        # Ref de producción esperado por el guard
-│   └── migrations/20261005000000_init.sql
+│   └── migrations/
+│       ├── 20261005000000_init.sql
+│       ├── 20261009000000_perfiles_least_privilege.sql
+│       └── 20261014000000_vendor_data_private.sql
 ├── playwright.config.ts
 ├── vitest.config.ts
 └── vite.config.ts
