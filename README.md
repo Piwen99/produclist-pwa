@@ -77,6 +77,7 @@ pnpm db:check-link
 - Autoregistro deshabilitado (`enable_signup=false` en `[auth]` y `[auth.email]`).
 - Las cuentas se crean desde el dashboard de Supabase: Authentication → Users → Add user (email + password). El trigger `on_auth_user_created` crea la fila de `public.perfiles` correspondiente con `rol = 'vendedor'`.
 - Cambio de contraseña: la app envía `current_password` y el provider lo valida. Requiere **Secure password change** habilitado en Supabase (Auth → Providers → Email), declarado como `secure_password_change = true` en `supabase/config.toml`. Si la sesión tiene más de 24 h, el provider puede pedir reautenticación: la app pide volver a iniciar sesión. **Rollout: desplegá el código antes de habilitar la setting**; al revés, los cambios de contraseña fallan.
+- **Cómo verificar que la setting sigue encendida:** desde el cliente no se puede leer. Verificala en el dashboard (Auth → Providers → Email) después de cualquier cambio en la configuración de auth del proyecto. El síntoma de un revert es que `updateUser` **no** devuelve `current_password_mismatch` con una contraseña actual incorrecta; ojo, en ese estado la misma llamada **sí cambia la contraseña**, así que no la uses como sonda en producción. Los fallos de storage y transporte quedan como diagnóstico `[auth]` en la consola (ver más abajo).
 - Promover al admin (idempotente):
 
   ```sql
