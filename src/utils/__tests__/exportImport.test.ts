@@ -280,6 +280,25 @@ describe('backup format compatibility', () => {
       });
       expect(quotes[0].items).toEqual(sampleQuote.items);
     });
+
+    it('keeps the client name when importing a backup (issue #101)', () => {
+      const { quotes, errors } = parseProductImport(
+        backupV2([validProduct], [{ ...sampleQuote, cliente: '  Almacén Los Andes  ' }]),
+      );
+
+      expect(errors).toHaveLength(0);
+      expect(quotes[0].cliente).toBe('Almacén Los Andes');
+    });
+
+    it('drops a non-string client name without failing the entry (issue #101)', () => {
+      const { quotes, errors } = parseProductImport(
+        backupV2([validProduct], [{ ...sampleQuote, cliente: 42 }]),
+      );
+
+      expect(errors).toHaveLength(0);
+      expect(quotes).toHaveLength(1);
+      expect(quotes[0].cliente).toBeUndefined();
+    });
   });
 });
 
