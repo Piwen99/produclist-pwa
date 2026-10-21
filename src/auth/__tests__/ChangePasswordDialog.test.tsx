@@ -161,6 +161,33 @@ describe('ChangePasswordDialog', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('cannot replay a stale request after closing and reopening (issue #89)', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn(() => new Promise<void>(() => {}));
+    const onClose = vi.fn();
+    const first = render(
+      <ChangePasswordDialog onClose={onClose} onSubmit={onSubmit} />,
+    );
+
+    await fill(user, 'current-secret', 'new-secret-1');
+    await user.click(screen.getByRole('button', { name: 'Cambiar contraseña' }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    // Closing while the request is in flight is impossible through the UI, but
+    // the gate can unmount the dialog (session change, route change).
+    first.unmount();
+
+    render(<ChangePasswordDialog onClose={onClose} onSubmit={onSubmit} />);
+
+    expect(screen.getByLabelText('Contraseña actual')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Cambiar contraseña' })).toBeEnabled();
+
+    const form = screen.getByRole('dialog').querySelector('form');
+    fireEvent.submit(form as HTMLFormElement);
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
+
   it('never submits an empty current password through a direct form submit', async () => {
     const user = userEvent.setup();
     const { onSubmit } = renderDialog();
@@ -172,6 +199,7 @@ describe('ChangePasswordDialog', () => {
     expect(form).not.toBeNull();
     fireEvent.submit(form as HTMLFormElement);
 
+    expect(screen.getByRole('alert')).toHaveTextContent('Ingresa tu contraseña actual.');
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
