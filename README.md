@@ -71,6 +71,21 @@ pnpm db:check-link
 
 > Usá `pnpm db:push`, no `supabase db push` directo: el CLI crudo no pasa por el guard.
 
+### Aislamiento por RLS (test contra Postgres real)
+
+`supabase/tests/rls_isolation.sql` afirma el modelo de privacidad contra una base real: un vendedor no lee ni escribe filas de otro, el admin ya no lee documentos de otros vendedores (sólo `perfiles` sigue cross-readable) y `anon` no tiene privilegios sobre las tablas de datos. Corre en CI en el job `rls` contra el stack local, nunca contra un proyecto remoto.
+
+Para correrlo en tu máquina, con Docker arriba:
+
+```bash
+supabase start
+supabase db reset --local
+psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" \
+  -v ON_ERROR_STOP=1 -f supabase/tests/rls_isolation.sql
+```
+
+El script corre en una transacción y hace `rollback`: no deja filas.
+
 ## Autenticación y alta de cuentas
 
 - Login por email/password.

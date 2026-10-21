@@ -61,3 +61,32 @@ jobs:
 
       - name: Run end-to-end tests
         run: pnpm exec playwright test
+
+  rls:
+    name: RLS isolation
+    runs-on: ubuntu-latest
+    # A cold runner pulls the local stack images; the tests themselves are fast.
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          # Pinned: the local stack and `db reset` flags are CLI-version sensitive.
+          version: 2.121.0
+
+      - name: Start the local stack
+        run: supabase start
+
+      - name: Apply the migrations from scratch
+        # Never `db push` and never a linked project: the production ref is
+        # guarded by scripts/supabase-link-guard.mjs and CI must not reach it.
+        run: supabase db reset --local
+
+      - name: Assert RLS isolation
+        run: >-
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+          -v ON_ERROR_STOP=1
+          -f supabase/tests/rls_isolation.sql
