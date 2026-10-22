@@ -124,6 +124,9 @@ export function createInMemoryQuotesRepo(
 ): QuotesRepo {
   const rows: SavedQuote[] = seed.map((row) => ({ ...row }));
   let nextId = nextIdAfter(rows);
+  // Idempotency mirror of `unique (owner_id, client_id)`: a retried save with
+  // the same key returns the row that already landed (issue #103).
+  const byClientId = new Map<string, SavedQuote>();
 
   const ownRows = (userId: string): SavedQuote[] =>
     rows.filter((row) => row.ownerId === userId);
@@ -139,6 +142,12 @@ export function createInMemoryQuotesRepo(
     },
 
     create(data) {
+      const key = data.clientId ? `${principal.userId}:${data.clientId}` : null;
+      if (key) {
+        const existing = byClientId.get(key);
+        if (existing) return Promise.resolve({ ...existing });
+      }
+
       const quote: SavedQuote = {
         id: nextId,
         fecha: data.fecha ?? new Date(),
@@ -151,6 +160,7 @@ export function createInMemoryQuotesRepo(
       };
       nextId += 1;
       rows.push(quote);
+      if (key) byClientId.set(key, quote);
       return Promise.resolve({ ...quote });
     },
 

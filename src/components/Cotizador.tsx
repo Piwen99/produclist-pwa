@@ -34,6 +34,10 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
   const [clients, setClients] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  // One idempotency key per save attempt: a retry after a failure reuses it, so
+  // the database can never store the same attempt twice (issue #103). A
+  // deliberate new save gets a fresh key.
+  const saveKeyRef = useRef<string | null>(null);
   const { repos, userId } = useData();
   const { toast } = useToast();
 
@@ -60,6 +64,8 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
     }
     savingRef.current = true;
     setSaving(true);
+    const clientId = saveKeyRef.current ?? crypto.randomUUID();
+    saveKeyRef.current = clientId;
     try {
       const trimmed = cliente.trim();
       await repos.quotes.create({
@@ -68,7 +74,11 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
         totalNeto: totals.subtotal,
         iva: totals.iva,
         total: totals.total,
+        clientId,
       });
+      // Only a confirmed save closes the attempt; a failure keeps the key so
+      // the retry is idempotent.
+      saveKeyRef.current = null;
       toast.success('Cotización guardada ✅');
     } catch (error) {
       console.error('Error saving quote:', error);

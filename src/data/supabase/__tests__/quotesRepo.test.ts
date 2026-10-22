@@ -142,6 +142,52 @@ describe('createQuotesRepo', () => {
 
       await expect(createQuotesRepo(client).create(INPUT)).rejects.toThrow('insert failed');
     });
+
+    it('sends the idempotency key with the insert (issue #103)', async () => {
+      const { client, query } = createStubClient({ data: ROW, error: null });
+
+      await createQuotesRepo(client).create({ ...INPUT, clientId: 'attempt-1' });
+
+      expect(query.insert).toHaveBeenCalledWith(
+        expect.objectContaining({ client_id: 'attempt-1' }),
+      );
+    });
+
+    it('treats an idempotency conflict as success instead of failing the save (issue #103)', async () => {
+      const { client } = createStubClient({
+        data: null,
+        error: {
+          code: '23505',
+          message:
+            'duplicate key value violates unique constraint "cotizaciones_owner_client_id_key"',
+        },
+      });
+
+      const quote = await createQuotesRepo(client).create({ ...INPUT, clientId: 'attempt-1' });
+
+      expect(quote).toMatchObject({
+        cliente: 'Juan',
+        items: ITEMS,
+        totalNeto: 2000,
+        iva: 380,
+        total: 2380,
+      });
+      expect(quote.id).toBeUndefined();
+    });
+
+    it('still throws a unique violation from another constraint (issue #103)', async () => {
+      const { client } = createStubClient({
+        data: null,
+        error: {
+          code: '23505',
+          message: 'duplicate key value violates unique constraint "otra_restriccion"',
+        },
+      });
+
+      await expect(
+        createQuotesRepo(client).create({ ...INPUT, clientId: 'attempt-1' }),
+      ).rejects.toThrow(/otra_restriccion/);
+    });
   });
 
   describe('remove', () => {
