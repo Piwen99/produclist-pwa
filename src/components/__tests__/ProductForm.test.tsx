@@ -187,6 +187,7 @@ describe('ProductForm — in-flight submit', () => {
     render(<ProductForm onSubmit={onSubmit} onCancel={vi.fn()} />);
 
     await user.type(screen.getByLabelText(/nombre/i), 'Test');
+    await user.type(screen.getByLabelText(/formato/i), '1,5');
     const precioInput = screen.getByLabelText(/precio neto/i);
     await user.clear(precioInput);
     await user.type(precioInput, '5000');
