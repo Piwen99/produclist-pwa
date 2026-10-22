@@ -19,6 +19,11 @@ export interface DataContextValue {
   repos: Repositories;
   userId: string;
   refresh: () => Promise<void>;
+  /**
+   * What the catalog retry action calls: seed the account if it is empty, then
+   * read. `refresh` alone cannot recover a failed first seed (issue #91).
+   */
+  retryLoad: () => Promise<void>;
   addProduct(input: ProductInput): Promise<Product>;
   updateProduct(id: number, changes: Partial<ProductInput>): Promise<void>;
   deleteProduct(id: number): Promise<void>;

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { StrictMode, type ReactNode } from 'react';
-import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { DataProvider, SEED_TIMEOUT_MS } from '../DataProvider';
 import { useData } from '../useData';
 import { createInMemoryRepositories } from '../testing/inMemoryRepos';
@@ -85,6 +85,13 @@ function Probe() {
         }}
       >
         delete
+      </button>
+      <button
+        onClick={() => {
+          void data.retryLoad();
+        }}
+      >
+        retry
       </button>
     </div>
   );
@@ -369,14 +376,50 @@ describe('DataProvider', () => {
     renderProbe(withProducts(createRepo({ seedIfEmpty, listOwn })));
 
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
+    // The catalog loaded, so a failed seed is not a screen-level error.
+    expect(screen.getByTestId('error')).toHaveTextContent('false');
     expect(errorSpy).toHaveBeenCalledWith(
       '[DataProvider] Failed to seed products',
       expect.any(Error),
     );
   });
 
-  it('still refreshes when seeding never settles (bounded wait)', async () => {
-    vi.useFakeTimers();
+  it('flags a failed seed when the catalog ends up empty (issue #91 residual)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const seedIfEmpty = vi
+      .fn<ProductsRepo['seedIfEmpty']>()
+      .mockRejectedValue(new Error('seed down'));
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([]);
+    renderProbe(withProducts(createRepo({ seedIfEmpty, listOwn })));
+
+    // An empty successful read after a failed seed is not "Sin productos": the
+    // user has to see the failure and a retry that tries again.
+    await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('true'));
+    expect(screen.getByTestId('count')).toHaveTextContent('0');
+  });
+
+  it('retryLoad seeds again and clears the failure', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const seedIfEmpty = vi
+      .fn<ProductsRepo['seedIfEmpty']>()
+      .mockRejectedValueOnce(new Error('seed down'))
+      .mockResolvedValue(undefined);
+    const listOwn = vi
+      .fn<ProductsRepo['listOwn']>()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([P1]);
+    renderProbe(withProducts(createRepo({ seedIfEmpty, listOwn })));
+
+    await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('true'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'retry' }));
+
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
+    expect(seedIfEmpty).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('error')).toHaveTextContent('false');
+  });
+
+  it('still refreshes when seeding never settles (bounded wait)', async () => {    vi.useFakeTimers();
     try {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const seedIfEmpty = vi

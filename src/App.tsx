@@ -32,7 +32,7 @@ function App() {
   const { remove } = useDeleteProduct();
   const { toast } = useToast();
   const { signOut, changePassword } = useAuth();
-  const { repos, userId, productsError, refresh } = useData();
+  const { repos, userId, productsError, retryLoad } = useData();
   // Creating a product only makes sense on the catalog route.
   const isProductos = useLocation().pathname === '/';
 
@@ -403,7 +403,7 @@ function App() {
             <ProductList
               products={products}
               loadError={productsError}
-              onRetry={refresh}
+              onRetry={retryLoad}
               onUpdate={(id, changes) => { void handleUpdateProduct(id, changes); }}
               onDelete={(id) => { void handleDeleteProduct(id); }}
               onStartEdit={handleEditProduct}

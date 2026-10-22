@@ -66,22 +66,33 @@ export function DataProvider({ repos, userId, children }: DataProviderProps) {
     }
   }, [repos, cache, userId]);
 
+  const loadProducts = useCallback(async () => {
+    let seedFailed = false;
+    try {
+      await withTimeout(repos.products.seedIfEmpty(userId, seedProducts), SEED_TIMEOUT_MS);
+    } catch (error) {
+      seedFailed = true;
+      console.error('[DataProvider] Failed to seed products', error);
+    }
+
+    await refresh();
+
+    // A failed seed on an account with no products used to read as "Sin
+    // productos", hiding the failure. Surface it only when the catalog really
+    // ended up empty: with rows, the seed failure is just a log.
+    const snapshot = cache.getSnapshot();
+    if (seedFailed && (snapshot === undefined || snapshot.length === 0)) {
+      setProductsError(true);
+    }
+  }, [repos, userId, refresh, cache]);
+
   useEffect(() => {
-    let active = true;
-    const bootstrap = async () => {
-      try {
-        await withTimeout(repos.products.seedIfEmpty(userId, seedProducts), SEED_TIMEOUT_MS);
-      } catch (error) {
-        console.error('[DataProvider] Failed to seed products', error);
-      }
-      if (!active) return;
-      await refresh();
-    };
-    void bootstrap();
-    return () => {
-      active = false;
-    };
-  }, [repos, userId, refresh]);
+    // `loadProducts` is async and only sets state after its awaits, so this is
+    // not a synchronous setState in an effect. The rule cannot see through the
+    // callback and would otherwise force a ref indirection for no benefit.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadProducts();
+  }, [loadProducts]);
 
   useEffect(() => {
     const handleVisibility = () => {
@@ -131,11 +142,22 @@ export function DataProvider({ repos, userId, children }: DataProviderProps) {
       repos,
       userId,
       refresh,
+      retryLoad: loadProducts,
       addProduct,
       updateProduct,
       deleteProduct,
     }),
-    [products, productsError, repos, userId, refresh, addProduct, updateProduct, deleteProduct],
+    [
+      products,
+      productsError,
+      repos,
+      userId,
+      refresh,
+      loadProducts,
+      addProduct,
+      updateProduct,
+      deleteProduct,
+    ],
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

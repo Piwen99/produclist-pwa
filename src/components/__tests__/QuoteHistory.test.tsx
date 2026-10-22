@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QuoteHistory } from '../QuoteHistory';
@@ -244,6 +244,32 @@ describe('QuoteHistory', () => {
 
       expect(screen.getByText(/15 de enero de 2024/i)).toBeInTheDocument();
       expect(await repos.quotes.listOwn(USER_ID)).toHaveLength(2);
+    });
+
+    it('issues one delete when the button is tapped twice while pending (issue #91)', async () => {
+      await seedQuotes(repos, mockQuotes);
+      vi.stubGlobal('confirm', vi.fn(() => true));
+      let release: () => void = () => {};
+      const remove = vi.spyOn(repos.quotes, 'remove').mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+      );
+
+      renderWithProviders(repos);
+
+      await screen.findByText(/15 de enero de 2024/i);
+      const button = screen.getAllByRole('button', { name: /eliminar/i })[0];
+      fireEvent.click(button);
+      fireEvent.click(button);
+
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(button).toBeDisabled();
+
+      await act(async () => {
+        release();
+      });
     });
   });
 

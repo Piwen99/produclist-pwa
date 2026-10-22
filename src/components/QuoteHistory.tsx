@@ -31,9 +31,11 @@ interface QuoteCardProps {
   quote: SavedQuote;
   onDelete: (id: number) => void;
   canDelete: boolean;
+  /** True while this quote's delete request is in flight. */
+  isDeleting?: boolean;
 }
 
-function QuoteCard({ quote, onDelete, canDelete }: QuoteCardProps) {
+function QuoteCard({ quote, onDelete, canDelete, isDeleting = false }: QuoteCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const detailId = `quote-detail-${String(quote.id)}`;
   const cliente = clientName(quote);
@@ -84,10 +86,11 @@ function QuoteCard({ quote, onDelete, canDelete }: QuoteCardProps) {
         {canDelete && (
           <button
             onClick={handleDelete}
-            className="shrink-0 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors touch-manipulation"
+            disabled={isDeleting}
+            className="shrink-0 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Eliminar cotización"
           >
-            Eliminar
+            {isDeleting ? 'Eliminando…' : 'Eliminar'}
           </button>
         )}
       </div>
@@ -135,9 +138,11 @@ export function QuoteHistory() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const retryingRef = useRef(false);
+  const deletingRef = useRef<number | null>(null);
   const { repos, userId } = useData();
   const { toast } = useToast();
   // toast.error is memoized in ToastProvider; the toast container object is not.
@@ -195,6 +200,11 @@ export function QuoteHistory() {
   }, []);
 
   const handleDelete = async (id: number) => {
+    // One delete at a time: the ref flips synchronously, so a second tap is
+    // ignored before React re-renders and disables the button.
+    if (deletingRef.current !== null) return;
+    deletingRef.current = id;
+    setDeletingId(id);
     try {
       await repos.quotes.remove(id);
       setQuotes((prev) => prev.filter((q) => q.id !== id));
@@ -202,6 +212,9 @@ export function QuoteHistory() {
     } catch (error) {
       console.error('Error deleting quote:', error);
       toast.error('Error al eliminar la cotización');
+    } finally {
+      deletingRef.current = null;
+      setDeletingId(null);
     }
   };
 
@@ -333,6 +346,7 @@ export function QuoteHistory() {
               quote={quote}
               onDelete={(id) => { void handleDelete(id); }}
               canDelete={quote.ownerId === userId}
+              isDeleting={deletingId === quote.id}
             />
           ))}
         </div>
