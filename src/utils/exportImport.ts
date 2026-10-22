@@ -301,6 +301,9 @@ function parseQuoteItem(raw: unknown): SavedQuote | ImportError {
 
   return {
     fecha,
+    // Preserve the client name the exporter wrote; a non-string value is
+    // dropped instead of failing the entry or the batch (issue #101).
+    cliente: normalizedCliente(quote.cliente) || undefined,
     items,
     totalNeto: quote.totalNeto,
     iva: quote.iva,
