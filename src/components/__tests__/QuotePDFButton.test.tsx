@@ -4,12 +4,12 @@ import type { ReactNode } from 'react';
 import { QuotePDFButton } from '../QuotePDFButton';
 import type { QuoteItem, QuoteTotals } from '../../types/quote';
 
-vi.mock('@react-pdf/renderer', () => ({
-  Document: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Page: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  View: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  StyleSheet: { create: (s: unknown) => s },
+// The component lazy-loads the PDF document module, which re-exports
+// PDFDownloadLink. Mocking that module keeps the lazy path under test while
+// removing the cost of transforming the real PDF document on first import,
+// which timed out under parallel load (#102).
+vi.mock('../../pdf/QuotePDFDocument', () => ({
+  QuotePDFDocument: () => null,
   PDFDownloadLink: ({
     children,
   }: {
