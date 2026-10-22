@@ -196,6 +196,91 @@ describe('backup format compatibility', () => {
     expect(listSends[0].cliente).toBe('  Acme SpA ');
     expect(listSends[0].items[0].nombre).toBe('ALMENDRA LAMINADA');
   });
+
+  describe('quote validation (issue #96)', () => {
+    const quoteWith = (overrides: Record<string, unknown> = {}) => ({
+      ...sampleQuote,
+      ...overrides,
+    });
+    const quoteWithItem = (item: Record<string, unknown>) =>
+      quoteWith({ items: [{ ...sampleQuote.items[0], ...item }] });
+
+    it('rejects a quote whose total is not a number instead of storing a silent zero', () => {
+      const { quotes, errors } = parseProductImport(
+        backupV2([validProduct], [quoteWith({ total: 'no-es-un-numero' })]),
+      );
+
+      expect(quotes).toHaveLength(0);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].error).toMatch(/total/i);
+    });
+
+    it('rejects a quote with a non-numeric item amount', () => {
+      const { quotes, errors } = parseProductImport(
+        backupV2([validProduct], [quoteWithItem({ precioKg: 'caro' })]),
+      );
+
+      expect(quotes).toHaveLength(0);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].error).toMatch(/precioKg/);
+    });
+
+    it('rejects an item with a missing cantidad (the NaN case)', () => {
+      const item = { ...sampleQuote.items[0] } as Record<string, unknown>;
+      delete item.cantidad;
+
+      const { quotes, errors } = parseProductImport(
+        backupV2([validProduct], [quoteWith({ items: [item] })]),
+      );
+
+      expect(quotes).toHaveLength(0);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].error).toMatch(/cantidad/);
+    });
+
+    it('rejects a numeric formato that would crash the history render', () => {
+      const { quotes, errors } = parseProductImport(
+        backupV2([validProduct], [quoteWithItem({ formato: 11.34 })]),
+      );
+
+      expect(quotes).toHaveLength(0);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].error).toMatch(/formato/);
+    });
+
+    it('rejects an empty formato, matching the product rule from #94', () => {
+      const { quotes, errors } = parseProductImport(
+        backupV2([validProduct], [quoteWithItem({ formato: '' })]),
+      );
+
+      expect(quotes).toHaveLength(0);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].error).toMatch(/formato/);
+    });
+
+    it('rejects a negative item amount', () => {
+      const { quotes, errors } = parseProductImport(
+        backupV2([validProduct], [quoteWithItem({ precioKg: -1 })]),
+      );
+
+      expect(quotes).toHaveLength(0);
+      expect(errors).toHaveLength(1);
+    });
+
+    it('keeps a valid quote byte-for-byte after validation', () => {
+      const { quotes, errors } = parseProductImport(
+        backupV2([validProduct], [sampleQuote]),
+      );
+
+      expect(errors).toHaveLength(0);
+      expect(quotes[0]).toMatchObject({
+        totalNeto: sampleQuote.totalNeto,
+        iva: sampleQuote.iva,
+        total: sampleQuote.total,
+      });
+      expect(quotes[0].items).toEqual(sampleQuote.items);
+    });
+  });
 });
 
 describe('createBackupService (owner-scoped preview/apply)', () => {
@@ -208,8 +293,7 @@ describe('createBackupService (owner-scoped preview/apply)', () => {
     service = createBackupService(repos, PRINCIPAL.userId);
   });
 
-  describe('products', () => {
-    it('preview writes nothing and separates adds from updates', async () => {
+  describe('products', () => {    it('preview writes nothing and separates adds from updates', async () => {
       await repos.products.create(validProduct);
       const text = JSON.stringify([
         { ...validProduct, precioNeto: 9900 },
@@ -252,6 +336,25 @@ describe('createBackupService (owner-scoped preview/apply)', () => {
       const result = await service.applyImport(preview);
       expect(result.success).toBe(1);
       expect(result.errors).toHaveLength(1);
+    });
+
+    it('reports a malformed quote in the preview and never writes it (issue #96)', async () => {
+      const malformed = {
+        ...sampleQuote,
+        items: [{ ...sampleQuote.items[0], formato: 11.34 }],
+      };
+
+      const preview = await service.previewImport(
+        backupV2([validProduct], [sampleQuote, malformed]),
+      );
+
+      expect(preview.quotesToAdd).toHaveLength(1);
+      expect(preview.errors).toHaveLength(1);
+      expect(preview.errors[0].error).toMatch(/formato/);
+
+      const result = await service.applyImport(preview);
+      expect(result.quotesAdded).toBe(1);
+      expect(await repos.quotes.listOwn(PRINCIPAL.userId)).toHaveLength(1);
     });
   });
 

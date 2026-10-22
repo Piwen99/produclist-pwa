@@ -94,4 +94,15 @@ describe('QuotePDFDocument', () => {
 
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
   });
+
+  it('shows an explicit dash instead of a $0 line when the format is missing', () => {
+    const missing: QuoteItem[] = [
+      { id: 'item-1', productId: 1, nombre: 'Producto', formato: '', cantidad: 2, precioKg: 500 },
+    ];
+    render(<QuotePDFDocument items={missing} totals={zeroTotals} />);
+
+    expect(screen.getByText('—')).toBeInTheDocument();
+    // The three zeroed totals still print $0; the line must not be a fourth.
+    expect(screen.getAllByText('$0')).toHaveLength(3);
+  });
 });

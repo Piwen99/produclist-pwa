@@ -146,6 +146,27 @@ describe('Cotizador', () => {
     expect(quotes[0].total).toBe(1349);
   });
 
+  it('blocks saving and disables the PDF when a line has no format (issue #94)', async () => {
+    const items: QuoteItem[] = [
+      { id: 'item-1', productId: 1, nombre: 'Almendra', formato: '', cantidad: 2, precioKg: 1000 },
+    ];
+    const { repos } = renderCotizador(items, { totalKg: 0, subtotal: 0, iva: 0, total: 0 });
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Almendra');
+    expect(alert).toHaveTextContent(/sin formato/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /guardar cotización/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/corregí el formato de: almendra/i)).toBeInTheDocument(),
+    );
+    expect(await repos.quotes.listOwn('test-user')).toHaveLength(0);
+
+    const pdfButton = await screen.findByRole('button', { name: /exportar pdf/i });
+    expect(pdfButton).toBeDisabled();
+  });
+
   it('should render the PDF trigger disabled when there are no items', async () => {
     renderCotizador();
     const pdfButton = await screen.findByRole('button', { name: /exportar pdf/i });

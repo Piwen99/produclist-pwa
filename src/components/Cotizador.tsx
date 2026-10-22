@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { QuoteItem } from './QuoteItem';
 import { QuoteProductSelector } from './QuoteProductSelector';
 import { QuoteShareButton } from './QuoteShareButton';
 import { QuotePDFButton } from './QuotePDFButton';
 import { useData } from '../data/useData';
 import { useToast } from '../hooks/useToast';
+import { invalidLines } from '../utils/quoteMath';
 import type { QuoteItem as QuoteItemType, QuoteTotals } from '../types/quote';
 import type { Product } from '../types/product';
 
@@ -34,6 +35,11 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
   const { repos, userId } = useData();
   const { toast } = useToast();
 
+  // A line whose product has no usable format cannot be priced. Blocking the
+  // save and the PDF keeps a silently zero-priced line out of the client
+  // document and out of the stored history (issue #94).
+  const unpriceable = useMemo(() => invalidLines(items), [items]);
+
   useEffect(() => {
     void repos.clients.listNames(userId).then(setClients).catch(console.error);
   }, [repos, userId]);
@@ -41,6 +47,10 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
   const handleSave = async () => {
     if (items.length === 0) {
       toast.warning('Agregá productos antes de guardar');
+      return;
+    }
+    if (unpriceable.length > 0) {
+      toast.warning(`Corregí el formato de: ${unpriceable.map((item) => item.nombre).join(', ')}`);
       return;
     }
     try {
@@ -114,6 +124,22 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
         )}
       </div>
 
+      {/* Unpriceable lines: the cart explains why save and PDF are blocked */}
+      {unpriceable.length > 0 && (
+        <div
+          role="alert"
+          className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-900/20"
+        >
+          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+            Hay líneas sin formato de producto
+          </p>
+          <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+            {unpriceable.map((item) => item.nombre).join(', ')}. Corregí el formato en el
+            producto para cotizarlas.
+          </p>
+        </div>
+      )}
+
       {/* Totals section */}
       <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
         <div className="space-y-2 text-sm">
@@ -143,7 +169,7 @@ export function Cotizador({ items, totals, onAddProduct, onUpdateQty, onUpdatePr
           items={items}
           totals={totals}
           cliente={cliente}
-          disabled={items.length === 0}
+          disabled={items.length === 0 || unpriceable.length > 0}
         />
       </div>
 
