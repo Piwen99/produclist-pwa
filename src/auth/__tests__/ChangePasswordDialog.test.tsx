@@ -161,17 +161,44 @@ describe('ChangePasswordDialog', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('never submits an empty current password through a direct form submit', async () => {
+  it('cannot replay a stale request after closing and reopening (issue #89)', async () => {
     const user = userEvent.setup();
+    const onSubmit = vi.fn(() => new Promise<void>(() => {}));
+    const onClose = vi.fn();
+    const first = render(
+      <ChangePasswordDialog onClose={onClose} onSubmit={onSubmit} />,
+    );
+
+    await fill(user, 'current-secret', 'new-secret-1');
+    await user.click(screen.getByRole('button', { name: 'Cambiar contraseña' }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    // Closing while the request is in flight is impossible through the UI, but
+    // the gate can unmount the dialog (session change, route change).
+    first.unmount();
+
+    const second = render(<ChangePasswordDialog onClose={onClose} onSubmit={onSubmit} />);
+
+    expect(screen.getByLabelText('Contraseña actual')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Cambiar contraseña' })).toBeEnabled();
+
+    const form = screen.getByRole('dialog').querySelector('form');
+    fireEvent.submit(form as HTMLFormElement);
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    second.unmount();
+  });
+
+  it('never submits an empty current password through a direct form submit', () => {
     const { onSubmit } = renderDialog();
 
-    await user.type(screen.getByLabelText('Nueva contraseña'), 'new-secret-1');
-    await user.type(screen.getByLabelText('Repetir nueva contraseña'), 'new-secret-1');
-
+    // A pristine form hits the current-password guard first: no typing state to
+    // race against, so the assertion pins the guard order deterministically.
     const form = screen.getByRole('dialog').querySelector('form');
     expect(form).not.toBeNull();
     fireEvent.submit(form as HTMLFormElement);
 
+    expect(screen.getByRole('alert')).toHaveTextContent('Ingresa tu contraseña actual.');
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

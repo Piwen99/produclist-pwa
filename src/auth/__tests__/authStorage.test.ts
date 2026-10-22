@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   AUTH_STORAGE_KEY,
   REMEMBER_KEY,
@@ -235,7 +235,40 @@ describe('authStorage', () => {
       safe.removeItem('token');
 
       expect(safe.getItem('token')).toBeNull();
-      expect(raw.getItem('token')).toBe('value');
+      // The delete failed, so the value is overwritten instead of surviving.
+      expect(raw.getItem('token')).toBe('');
+    });
+
+    it('leaves no usable token on disk when only the overwrite works (issue #85)', () => {
+      const raw = createStubStorage({ [AUTH_STORAGE_KEY]: 'secret-token' });
+      raw.failRemove = true;
+
+      createSafeStorage(raw).removeItem(AUTH_STORAGE_KEY);
+
+      // A fresh launch reads the raw storage directly: it must not find a token.
+      expect(raw.getItem(AUTH_STORAGE_KEY)).toBe('');
+      expect(createSafeStorage(raw).getItem(AUTH_STORAGE_KEY)).toBeNull();
+    });
+
+    it('reports the unrecoverable case once and still signs the tab out (issue #85)', () => {
+      const raw = createStubStorage({ [AUTH_STORAGE_KEY]: 'secret-token' });
+      raw.failRemove = true;
+      raw.failSet = true;
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      try {
+        const safe = createSafeStorage(raw);
+        safe.removeItem(AUTH_STORAGE_KEY);
+
+        expect(safe.getItem(AUTH_STORAGE_KEY)).toBeNull();
+        // Documented impossible case: both the delete and the overwrite were
+        // rejected, so the value stays on disk and only the tab is signed out.
+        expect(raw.getItem(AUTH_STORAGE_KEY)).toBe('secret-token');
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][1]).toBe('storage-remove-failed');
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it('shares the fallback across wrappers of the same storage', () => {
@@ -256,18 +289,40 @@ describe('authStorage', () => {
   describe('clearLegacyAuthTokens', () => {
     it('removes legacy Supabase auth keys from both storages', () => {
       localStorage.setItem('sb-legacy-auth-token', 'old');
+      localStorage.setItem('sb-other-auth-token', 'old-2');
       localStorage.setItem('produclist-auth', 'current');
       localStorage.setItem('auth:remember', '1');
+      localStorage.setItem(LAST_EMAIL_KEY, 'vendedor@example.com');
       sessionStorage.setItem('sb-legacy-auth-token', 'old');
       sessionStorage.setItem('sb-legacy-auth-token-code-verifier', 'verifier');
 
       clearLegacyAuthTokens();
 
       expect(localStorage.getItem('sb-legacy-auth-token')).toBeNull();
+      expect(localStorage.getItem('sb-other-auth-token')).toBeNull();
       expect(sessionStorage.getItem('sb-legacy-auth-token')).toBeNull();
       expect(localStorage.getItem('produclist-auth')).toBe('current');
       expect(localStorage.getItem('auth:remember')).toBe('1');
+      expect(localStorage.getItem(LAST_EMAIL_KEY)).toBe('vendedor@example.com');
       expect(sessionStorage.getItem('sb-legacy-auth-token-code-verifier')).toBe('verifier');
+    });
+
+    it('diagnoses a cleanup whose removeItem throws and leaves the storage enumerable (issue #89)', () => {
+      const raw = createStubStorage({ 'sb-legacy-auth-token': 'old' });
+      raw.failRemove = true;
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      try {
+        expect(() => clearLegacyAuthTokens(raw, null)).not.toThrow();
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        // The tokens survive this launch, but the storage is still readable, so
+        // the next launch can retry instead of being left in a broken state.
+        expect(raw.length).toBe(1);
+        expect(raw.getItem('sb-legacy-auth-token')).toBe('old');
+      } finally {
+        warn.mockRestore();
+      }
     });
 
     it('is idempotent', () => {
@@ -331,6 +386,85 @@ describe('authStorage', () => {
       expect(() =>
         setRememberPreference(true, createThrowingStorage(), createThrowingStorage()),
       ).not.toThrow();
+    });
+
+    it('reads back the preference and the last email through the same blocked storage (issue #89)', () => {
+      const blocked = createThrowingStorage();
+
+      setRememberPreference(true, blocked, blocked);
+      writeLastEmail('vendedor@example.com', blocked);
+
+      expect(isRememberEnabled(blocked)).toBe(true);
+      expect(readLastEmail(blocked)).toBe('vendedor@example.com');
+      expect(clearLastEmail(blocked)).toBeUndefined();
+      expect(readLastEmail(blocked)).toBe('');
+    });
+
+    it('shares one in-memory session between clients with no storage (intended, issue #89)', () => {
+      const first = createAuthStorage(null, null);
+      const second = createAuthStorage(null, null);
+
+      first.setItem(AUTH_STORAGE_KEY, 'token');
+
+      // Two clients in one tab must see the same session: the shared memory is
+      // the tab's session, not a per-client one.
+      expect(second.getItem(AUTH_STORAGE_KEY)).toBe('token');
+    });
+  });
+
+  describe('failure diagnostics (issue #86)', () => {
+    let warn: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      warn.mockRestore();
+    });
+
+    it('reports a blocked read exactly once, without the stored value', () => {
+      const raw = createStubStorage({ [AUTH_STORAGE_KEY]: 'secret-token' });
+      raw.failGet = true;
+
+      createSafeStorage(raw).getItem(AUTH_STORAGE_KEY);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][1]).toBe('storage-read-failed');
+      expect(JSON.stringify(warn.mock.calls[0])).not.toContain('secret-token');
+    });
+
+    it('reports a failed write exactly once, without the stored value', () => {
+      const raw = createStubStorage();
+      raw.failSet = true;
+
+      createSafeStorage(raw).setItem(AUTH_STORAGE_KEY, 'secret-token');
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][1]).toBe('storage-write-failed');
+      expect(JSON.stringify(warn.mock.calls[0])).not.toContain('secret-token');
+    });
+
+    it('reports a failed legacy-token cleanup exactly once', () => {
+      const raw = createStubStorage({ 'sb-legacy-auth-token': 'old' });
+      raw.failRemove = true;
+
+      clearLegacyAuthTokens(raw, null);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][1]).toBe('legacy-token-cleanup-failed');
+    });
+
+    it('stays silent when every operation succeeds', () => {
+      const raw = createStubStorage();
+      const safe = createSafeStorage(raw);
+
+      safe.setItem(AUTH_STORAGE_KEY, 'token');
+      safe.getItem(AUTH_STORAGE_KEY);
+      safe.removeItem(AUTH_STORAGE_KEY);
+      clearLegacyAuthTokens(raw, null);
+
+      expect(warn).not.toHaveBeenCalled();
     });
   });
 });

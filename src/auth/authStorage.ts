@@ -11,6 +11,8 @@
  * is never stored: credential saving stays with the browser password manager.
  */
 
+import { reportAuthDiagnostic } from '../utils/diagnostics';
+
 export const AUTH_STORAGE_KEY = 'produclist-auth';
 export const REMEMBER_KEY = 'auth:remember';
 export const LAST_EMAIL_KEY = 'auth:last-email';
@@ -29,6 +31,15 @@ interface SafeStorage {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
   removeItem(key: string): void;
+}
+
+/**
+ * An empty string is never a valid stored token. Treating it as absent lets a
+ * failed delete be neutralised by overwriting the value (issue #85): a fresh
+ * process reads the raw storage and finds nothing usable.
+ */
+function absentIfEmpty(value: string | null): string | null {
+  return value === null || value === '' ? null : value;
 }
 
 interface MemoryState {
@@ -76,12 +87,13 @@ export function createSafeStorage(raw: Storage | null): SafeStorage {
 
   return {
     getItem(key) {
-      if (memory.authoritative.has(key)) return memory.values.get(key) ?? null;
-      if (!raw) return memory.values.get(key) ?? null;
+      if (memory.authoritative.has(key)) return absentIfEmpty(memory.values.get(key) ?? null);
+      if (!raw) return absentIfEmpty(memory.values.get(key) ?? null);
       try {
-        return raw.getItem(key);
+        return absentIfEmpty(raw.getItem(key));
       } catch {
-        return memory.values.get(key) ?? null;
+        reportAuthDiagnostic('storage-read-failed', { key });
+        return absentIfEmpty(memory.values.get(key) ?? null);
       }
     },
     setItem(key, value) {
@@ -92,6 +104,7 @@ export function createSafeStorage(raw: Storage | null): SafeStorage {
         memory.authoritative.delete(key);
       } catch {
         memory.authoritative.add(key);
+        reportAuthDiagnostic('storage-write-failed', { key });
       }
     },
     removeItem(key) {
@@ -100,9 +113,21 @@ export function createSafeStorage(raw: Storage | null): SafeStorage {
       try {
         raw.removeItem(key);
         memory.authoritative.delete(key);
+        return;
       } catch {
-        // The value may still exist in the real storage; hide it from the app.
+        // The delete was rejected, so the value may still exist on disk. A
+        // fresh launch reads the raw storage directly, so hiding it in memory
+        // is not enough: overwrite it with an empty, unusable value.
+      }
+
+      try {
+        raw.setItem(key, '');
+        memory.authoritative.delete(key);
+      } catch {
+        // Both paths were rejected. The value cannot be revoked from here; the
+        // tab stays signed out and the failure is observable (issue #85).
         memory.authoritative.add(key);
+        reportAuthDiagnostic('storage-remove-failed', { key });
       }
     },
   };
@@ -162,6 +187,7 @@ export function clearLegacyAuthTokens(
       for (const key of keys) storage.removeItem(key);
     } catch {
       // Storage unavailable: nothing to clean, and the safe adapter handles it.
+      reportAuthDiagnostic('legacy-token-cleanup-failed');
     }
   }
 }

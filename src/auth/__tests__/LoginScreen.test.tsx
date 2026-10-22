@@ -185,5 +185,27 @@ describe('LoginScreen', () => {
       expect(signIn).toHaveBeenCalledWith('vendedor@example.com', 'secret');
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
+
+    it('shows the safe message and leaks no credentials when the sign-in is rejected (issue #89)', async () => {
+      const user = userEvent.setup();
+      const auth = createFakeAuth();
+      vi.spyOn(auth, 'signIn').mockRejectedValueOnce(new Error('storage blocked'));
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new Error('storage blocked');
+      });
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new Error('storage blocked');
+      });
+      renderLogin(auth);
+
+      await user.type(screen.getByLabelText('Correo electrónico'), 'vendedor@example.com');
+      await user.type(screen.getByLabelText('Contraseña'), 'secret');
+      await user.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Correo o contraseña incorrectos.');
+      // The raw failure never reaches the user.
+      expect(alert).not.toHaveTextContent(/storage blocked/i);
+    });
   });
 });

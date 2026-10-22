@@ -5,6 +5,7 @@ import {
   CURRENT_PASSWORD_MESSAGE,
   INVALID_CREDENTIALS_MESSAGE,
   PASSWORD_UPDATE_MESSAGE,
+  PASSWORD_UPDATE_TIMEOUT_MS,
   REAUTHENTICATION_MESSAGE,
   SAME_PASSWORD_MESSAGE,
   WEAK_PASSWORD_MESSAGE,
@@ -194,7 +195,7 @@ describe('createSupabaseAuth', () => {
       return makeStub();
     }
 
-    it('sends the current password to the provider without a separate sign-in', async () => {
+    it('resolves when the provider accepts the update without validating current_password (rollout assumption)', async () => {
       const { client, auth } = stubWithSession();
 
       await expect(
@@ -207,6 +208,51 @@ describe('createSupabaseAuth', () => {
       });
       expect(auth.signInWithPassword).not.toHaveBeenCalled();
       expect(auth.getSession).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [
+        'a message-only current-password error',
+        { message: 'Current password is incorrect' },
+        CURRENT_PASSWORD_MESSAGE,
+      ],
+      [
+        'a message-only reauthentication error',
+        { message: 'Reauthentication required' },
+        REAUTHENTICATION_MESSAGE,
+      ],
+    ])('maps %s without a provider code (issue #89)', async (_label, error, expected) => {
+      const { client, auth } = stubWithSession();
+      auth.updateUser.mockResolvedValueOnce({ data: { user: null }, error });
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
+      ).rejects.toThrow(expected);
+    });
+
+    it('prefers the current-password message when both signals overlap, without signing out (issue #89)', async () => {
+      const { client, auth } = stubWithSession();
+      auth.updateUser.mockResolvedValueOnce({
+        data: { user: null },
+        error: {
+          message: 'Current password is incorrect. Reauthentication required.',
+        },
+      });
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
+      ).rejects.toThrow(CURRENT_PASSWORD_MESSAGE);
+      // A wrong password is recoverable: the session must survive.
+      expect(auth.signOut).not.toHaveBeenCalled();
+    });
+
+    it('forwards empty values; validation belongs to the dialog (issue #89)', async () => {
+      const { client, auth } = stubWithSession();
+
+      await expect(
+        createSupabaseAuth(client).changePassword('', ''),
+      ).resolves.toBeUndefined();
+      expect(auth.updateUser).toHaveBeenCalledWith({ current_password: '', password: '' });
     });
 
     it('maps a current password mismatch to a safe message', async () => {
@@ -233,6 +279,47 @@ describe('createSupabaseAuth', () => {
           message: 'Reauthentication required',
         },
       });
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
+      ).rejects.toThrow(REAUTHENTICATION_MESSAGE);
+      // A retry with the same stale session cannot work: the gate must show
+      // the login screen (issue #87).
+      expect(auth.signOut).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ['session_expired', { code: 'session_expired', message: 'Session expired' }],
+      ['session_not_found', { code: 'session_not_found', message: 'Session not found' }],
+    ])('signs out and asks to re-login on %s (issue #87)', async (_label, error) => {
+      const { client, auth } = stubWithSession();
+      auth.updateUser.mockResolvedValueOnce({ data: { user: null }, error });
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
+      ).rejects.toThrow(REAUTHENTICATION_MESSAGE);
+      expect(auth.signOut).toHaveBeenCalledTimes(1);
+    });
+
+    it('signs out when the client throws AuthSessionMissingError (issue #87)', async () => {
+      const { client, auth } = stubWithSession();
+      const missing = new Error('Auth session missing!');
+      missing.name = 'AuthSessionMissingError';
+      auth.updateUser.mockRejectedValueOnce(missing);
+
+      await expect(
+        createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
+      ).rejects.toThrow(REAUTHENTICATION_MESSAGE);
+      expect(auth.signOut).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the re-login message when the sign-out itself fails (issue #87)', async () => {
+      const { client, auth } = stubWithSession();
+      auth.updateUser.mockResolvedValueOnce({
+        data: { user: null },
+        error: { code: 'session_expired', message: 'Session expired' },
+      });
+      auth.signOut.mockRejectedValueOnce(new Error('network down'));
 
       await expect(
         createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
@@ -285,6 +372,85 @@ describe('createSupabaseAuth', () => {
       await expect(
         createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
       ).rejects.toThrow(PASSWORD_UPDATE_MESSAGE);
+    });
+
+    it('reports the transport cause once, without leaking it to the user (issue #86)', async () => {
+      const { client, auth } = stubWithSession();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      auth.updateUser.mockRejectedValueOnce(
+        new TypeError('Failed to fetch https://project.supabase.co/auth/v1/user'),
+      );
+
+      try {
+        await expect(
+          createSupabaseAuth(client).changePassword('current-secret', 'new-secret-1'),
+        ).rejects.toThrow(PASSWORD_UPDATE_MESSAGE);
+
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][1]).toBe('auth-transport-failed');
+        expect(JSON.stringify(warn.mock.calls[0])).not.toContain('supabase.co');
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('unblocks a hung password change after the timeout (issue #88)', async () => {
+      const { client, auth } = stubWithSession();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      auth.updateUser.mockReturnValue(new Promise(() => {}));
+      vi.useFakeTimers();
+
+      try {
+        const settled = createSupabaseAuth(client)
+          .changePassword('current-secret', 'new-secret-1')
+          .then(
+            () => 'resolved',
+            (error: Error) => error.message,
+          );
+
+        await vi.advanceTimersByTimeAsync(PASSWORD_UPDATE_TIMEOUT_MS);
+
+        await expect(settled).resolves.toBe(PASSWORD_UPDATE_MESSAGE);
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.mock.calls[0][1]).toBe('auth-transport-failed');
+        expect(warn.mock.calls[0][2]).toMatchObject({ reason: 'TimeoutError' });
+      } finally {
+        vi.useRealTimers();
+        warn.mockRestore();
+      }
+    });
+
+    it('ignores a late success after the timeout (issue #88)', async () => {
+      const { client, auth } = stubWithSession();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      let resolveLate: ((value: unknown) => void) | undefined;
+      auth.updateUser.mockReturnValue(
+        new Promise((resolve) => {
+          resolveLate = resolve;
+        }),
+      );
+      vi.useFakeTimers();
+
+      try {
+        const settled = createSupabaseAuth(client)
+          .changePassword('current-secret', 'new-secret-1')
+          .then(
+            () => 'resolved',
+            (error: Error) => error.message,
+          );
+
+        await vi.advanceTimersByTimeAsync(PASSWORD_UPDATE_TIMEOUT_MS);
+        // The provider answers after the dialog gave up: the success path must
+        // not run, and the user must not see a second outcome.
+        resolveLate?.({ data: { user: null }, error: null });
+        await vi.advanceTimersByTimeAsync(0);
+
+        await expect(settled).resolves.toBe(PASSWORD_UPDATE_MESSAGE);
+        expect(warn).toHaveBeenCalledTimes(1);
+      } finally {
+        vi.useRealTimers();
+        warn.mockRestore();
+      }
     });
   });
 });
