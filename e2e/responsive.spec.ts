@@ -52,8 +52,55 @@ test.describe('Responsive visual tests', () => {
     await expect(page.getByRole('button', { name: 'Nuevo producto' })).toHaveCount(0);
   });
 
-  test('categories must start collapsed', async ({ page }) => {
-    // Category headers should be visible
+  test('install banner clears the PDF button and stays dismissed (issue #97)', async ({ page }) => {
+    const dispatchInstallPrompt = () =>
+      page.evaluate(() => {
+        const event = new Event('beforeinstallprompt') as Event & {
+          prompt: () => Promise<void>;
+          userChoice: Promise<{ outcome: string }>;
+        };
+        event.prompt = () => Promise.resolve();
+        event.userChoice = Promise.resolve({ outcome: 'dismissed' });
+        window.dispatchEvent(event);
+      });
+
+    await dispatchInstallPrompt();
+
+    const banner = page.getByText('Instalar Produclist');
+    await expect(banner).toBeVisible();
+
+    const pdfFab = page.getByRole('button', { name: 'Generar PDF' });
+    await expect(pdfFab).toBeVisible();
+
+    const [bannerBox, fabBox] = await Promise.all([
+      banner.boundingBox(),
+      pdfFab.boundingBox(),
+    ]);
+    expect(bannerBox).not.toBeNull();
+    expect(fabBox).not.toBeNull();
+
+    if (bannerBox && fabBox) {
+      const intersects = !(
+        bannerBox.x + bannerBox.width <= fabBox.x ||
+        fabBox.x + fabBox.width <= bannerBox.x ||
+        bannerBox.y + bannerBox.height <= fabBox.y ||
+        fabBox.y + fabBox.height <= bannerBox.y
+      );
+      expect(intersects).toBe(false);
+    }
+
+    // The dismissal survives a reload: the banner must not come back.
+    await page.getByRole('button', { name: 'Ahora no' }).click();
+    await expect(banner).toHaveCount(0);
+
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await dispatchInstallPrompt();
+
+    await expect(banner).toHaveCount(0);
+  });
+
+  test('categories must start collapsed', async ({ page }) => {    // Category headers should be visible
     await expect(page.getByText('Frutos Secos')).toBeVisible();
     await expect(page.getByText('Legumbres')).toBeVisible();
 

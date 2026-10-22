@@ -1,5 +1,26 @@
 import { useState, useEffect, useCallback } from 'react';
 
+/** Device-local flag: a dismissal must survive reloads, not just this render. */
+export const INSTALL_DISMISSED_KEY = 'produclist:installPromptDismissed';
+
+function wasDismissed(): boolean {
+  try {
+    return window.localStorage.getItem(INSTALL_DISMISSED_KEY) === '1';
+  } catch {
+    // Storage blocked: the preference is unknowable, so offer the banner again
+    // for this session. Never crash the app over it.
+    return false;
+  }
+}
+
+function rememberDismissal(): void {
+  try {
+    window.localStorage.setItem(INSTALL_DISMISSED_KEY, '1');
+  } catch {
+    // The dismissal still hides the banner for this session.
+  }
+}
+
 export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
@@ -15,6 +36,10 @@ export function InstallPrompt() {
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
+      // A dismissal is device-local and permanent until storage is cleared
+      // (issue #97). The banner used to be component state, so any remount or
+      // reload brought it back.
+      if (wasDismissed()) return;
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setShowPrompt(true);
     };
@@ -47,7 +72,9 @@ export function InstallPrompt() {
   }, [deferredPrompt]);
 
   const handleDismiss = useCallback(() => {
+    rememberDismissal();
     setShowPrompt(false);
+    setDeferredPrompt(null);
   }, []);
 
   if (!showPrompt || isInstalled) {
@@ -55,7 +82,9 @@ export function InstallPrompt() {
   }
 
   return (
-    <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 right-4 sm:bottom-24 sm:left-auto sm:right-6 sm:w-80 z-50">
+    // Sits above the floating PDF button (bottom 4.5rem + ~48 px tall, z-40) so
+    // the banner never covers it (issue #97).
+    <div className="fixed bottom-[calc(8.5rem+env(safe-area-inset-bottom))] left-4 right-4 sm:bottom-24 sm:left-auto sm:right-6 sm:w-80 z-50">
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4 animate-in fade-in slide-in-from-bottom-4">
         <div className="flex items-start gap-3">
           <div className="flex-1">

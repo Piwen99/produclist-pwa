@@ -31,9 +31,11 @@ interface QuoteCardProps {
   quote: SavedQuote;
   onDelete: (id: number) => void;
   canDelete: boolean;
+  /** True while this quote's delete request is in flight. */
+  isDeleting?: boolean;
 }
 
-function QuoteCard({ quote, onDelete, canDelete }: QuoteCardProps) {
+function QuoteCard({ quote, onDelete, canDelete, isDeleting = false }: QuoteCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const detailId = `quote-detail-${String(quote.id)}`;
   const cliente = clientName(quote);
@@ -84,10 +86,11 @@ function QuoteCard({ quote, onDelete, canDelete }: QuoteCardProps) {
         {canDelete && (
           <button
             onClick={handleDelete}
-            className="shrink-0 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors touch-manipulation"
+            disabled={isDeleting}
+            className="shrink-0 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Eliminar cotización"
           >
-            Eliminar
+            {isDeleting ? 'Eliminando…' : 'Eliminar'}
           </button>
         )}
       </div>
@@ -133,21 +136,28 @@ function QuoteCard({ quote, onDelete, canDelete }: QuoteCardProps) {
 export function QuoteHistory() {
   const [quotes, setQuotes] = useState<SavedQuote[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const retryingRef = useRef(false);
+  const deletingRef = useRef<number | null>(null);
   const { repos, userId } = useData();
   const { toast } = useToast();
   // toast.error is memoized in ToastProvider; the toast container object is not.
   const showError = toast.error;
 
   const loadQuotes = useCallback(() => {
-    repos.quotes
+    return repos.quotes
       .listOwn(userId)
       .then((data) => {
         setQuotes(data);
+        setLoadError(false);
       })
       .catch((error: unknown) => {
         console.error('Error loading quotes:', error);
+        setLoadError(true);
         showError('Error al cargar las cotizaciones');
       })
       .finally(() => {
@@ -156,8 +166,26 @@ export function QuoteHistory() {
   }, [repos, userId, showError]);
 
   useEffect(() => {
-    loadQuotes();
+    void loadQuotes();
   }, [loadQuotes]);
+
+  // Re-entrancy guard: the ref flips synchronously, so a second click is ignored
+  // even before React re-renders and disables the button (same as ListSends).
+  const handleRetry = () => {
+    if (retryingRef.current) return;
+    retryingRef.current = true;
+    setIsRetrying(true);
+    void Promise.resolve()
+      .then(() => loadQuotes())
+      .catch((error: unknown) => {
+        console.error('Error retrying quotes:', error);
+        setLoadError(true);
+      })
+      .finally(() => {
+        retryingRef.current = false;
+        setIsRetrying(false);
+      });
+  };
 
   // Keyboard shortcut: Ctrl+/ or Cmd+/ to focus the client search
   useEffect(() => {
@@ -172,6 +200,11 @@ export function QuoteHistory() {
   }, []);
 
   const handleDelete = async (id: number) => {
+    // One delete at a time: the ref flips synchronously, so a second tap is
+    // ignored before React re-renders and disables the button.
+    if (deletingRef.current !== null) return;
+    deletingRef.current = id;
+    setDeletingId(id);
     try {
       await repos.quotes.remove(id);
       setQuotes((prev) => prev.filter((q) => q.id !== id));
@@ -179,6 +212,9 @@ export function QuoteHistory() {
     } catch (error) {
       console.error('Error deleting quote:', error);
       toast.error('Error al eliminar la cotización');
+    } finally {
+      deletingRef.current = null;
+      setDeletingId(null);
     }
   };
 
@@ -197,6 +233,29 @@ export function QuoteHistory() {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-gray-500 dark:text-gray-400">Cargando...</div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div>
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Historial de Cotizaciones</h2>
+        <div className="flex flex-col items-center justify-center py-12 text-center bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+          <p className="text-gray-900 dark:text-white font-medium mb-1">
+            No se pudieron cargar las cotizaciones
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+            Revisá tu conexión e intentá de nuevo.
+          </p>
+          <button
+            onClick={handleRetry}
+            disabled={isRetrying}
+            className="px-4 py-2 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isRetrying ? 'Reintentando…' : 'Reintentar'}
+          </button>
+        </div>
       </div>
     );
   }
@@ -287,6 +346,7 @@ export function QuoteHistory() {
               quote={quote}
               onDelete={(id) => { void handleDelete(id); }}
               canDelete={quote.ownerId === userId}
+              isDeleting={deletingId === quote.id}
             />
           ))}
         </div>

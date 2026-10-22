@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ClientPrices } from '../ClientPrices';
 import { DataProvider } from '../../data/DataProvider';
@@ -34,6 +34,15 @@ describe('ClientPrices', () => {
   it('shows an empty state when there are no clients', async () => {
     renderWithProvider(repos);
     expect(await screen.findByText(/todavía no hay clientes/i)).toBeInTheDocument();
+  });
+
+  it('shows the loading placeholder, not the empty state, while the client list is pending', () => {
+    repos.clients.listNames = () => new Promise(() => {});
+
+    renderWithProvider(repos);
+
+    expect(screen.getByText('Cargando…')).toBeInTheDocument();
+    expect(screen.queryByText(/todavía no hay clientes/i)).not.toBeInTheDocument();
   });
 
   it('shows the last price per product for the selected client', async () => {
@@ -289,6 +298,84 @@ describe('ClientPrices', () => {
 
     expect(await screen.findByText('Sin documentos para este cliente.')).toBeInTheDocument();
     expect(screen.getByText('No hay precios registrados para este cliente.')).toBeInTheDocument();
+  });
+
+  describe('load errors', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('shows a retryable error state, not the loading or empty state, when the documents read fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      repos.clients.listNames = async () => ['Juan'];
+      vi.spyOn(repos.listSends, 'listOwn').mockRejectedValueOnce(new Error('boom'));
+
+      renderWithProvider(repos);
+
+      expect(await screen.findByText(/no se pudo cargar el historial de clientes/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^reintentar$/i })).toBeEnabled();
+      expect(screen.queryByText('Cargando…')).not.toBeInTheDocument();
+      expect(screen.queryByText('Sin documentos para este cliente.')).not.toBeInTheDocument();
+    });
+
+    it('shows a retryable error state, not the empty state, when the client list read fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(repos.clients, 'listNames').mockRejectedValueOnce(new Error('boom'));
+
+      renderWithProvider(repos);
+
+      expect(await screen.findByText(/no se pudo cargar el historial de clientes/i)).toBeInTheDocument();
+      expect(screen.queryByText(/todavía no hay clientes/i)).not.toBeInTheDocument();
+    });
+
+    it('re-runs the reads when Reintentar is clicked and then shows the data', async () => {
+      const user = userEvent.setup();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      repos.clients.listNames = async () => ['Juan'];
+      await repos.listSends.create({
+        cliente: 'Juan',
+        fecha: new Date('2026-09-01'),
+        items: [{ nombre: 'ALMENDRA', formato: '11,34', precioNeto: 8000, precioBruto: 9520 }],
+      });
+      const listSpy = vi
+        .spyOn(repos.listSends, 'listOwn')
+        .mockRejectedValueOnce(new Error('boom'));
+      renderWithProvider(repos);
+
+      await screen.findByText(/no se pudo cargar el historial de clientes/i);
+      const callsBefore = listSpy.mock.calls.length;
+      await user.click(screen.getByRole('button', { name: /^reintentar$/i }));
+
+      expect(await screen.findByText('ALMENDRA')).toBeInTheDocument();
+      expect(listSpy.mock.calls.length).toBe(callsBefore + 1);
+    });
+
+    it('does not start a second read while a retry is in flight', async () => {
+      const user = userEvent.setup();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      repos.clients.listNames = async () => ['Juan'];
+      let resolveRead!: (rows: ListSend[]) => void;
+      const pending = new Promise<ListSend[]>((resolve) => {
+        resolveRead = resolve;
+      });
+      const listSpy = vi
+        .spyOn(repos.listSends, 'listOwn')
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockReturnValueOnce(pending);
+      renderWithProvider(repos);
+
+      await screen.findByText(/no se pudo cargar el historial de clientes/i);
+      const callsBefore = listSpy.mock.calls.length;
+      await user.click(screen.getByRole('button', { name: /^reintentar$/i }));
+
+      const busy = screen.getByRole('button', { name: /reintentando/i });
+      expect(busy).toBeDisabled();
+      fireEvent.click(busy);
+      expect(listSpy.mock.calls.length).toBe(callsBefore + 1);
+
+      resolveRead([]);
+      expect(await screen.findByText('Sin documentos para este cliente.')).toBeInTheDocument();
+    });
   });
 
   describe('admin view', () => {

@@ -175,6 +175,34 @@ describe('ProductForm — create mode', () => {
   });
 });
 
+describe('ProductForm — in-flight submit', () => {
+  it('calls onSubmit once on a double click and disables submit until it settles', async () => {
+    const user = userEvent.setup();
+    let finish!: () => void;
+    const onSubmit = vi.fn(
+      () => new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    render(<ProductForm onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/nombre/i), 'Test');
+    await user.type(screen.getByLabelText(/formato/i), '1,5');
+    const precioInput = screen.getByLabelText(/precio neto/i);
+    await user.clear(precioInput);
+    await user.type(precioInput, '5000');
+
+    const submit = screen.getByRole('button', { name: 'Crear Producto' });
+    await user.dblClick(submit);
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(submit).toBeDisabled();
+
+    finish();
+    await waitFor(() => expect(submit).toBeEnabled());
+  });
+});
+
 describe('ProductForm — edit mode', () => {
   it('renders "Editar Producto" title', () => {
     renderForm(mockProduct);

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QuoteHistory } from '../QuoteHistory';
 import { ToastProvider } from '../../hooks/ToastProvider';
@@ -70,6 +71,73 @@ describe('QuoteHistory', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  describe('load errors', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('shows a retryable error state, not the empty state, when the read fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(repos.quotes, 'listOwn').mockRejectedValueOnce(new Error('boom'));
+      renderWithProviders(repos);
+
+      expect(await screen.findByText(/no se pudieron cargar las cotizaciones/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^reintentar$/i })).toBeEnabled();
+      expect(screen.queryByText(/no hay cotizaciones guardadas/i)).not.toBeInTheDocument();
+    });
+
+    it('still reports the failed read with an error toast', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.spyOn(repos.quotes, 'listOwn').mockRejectedValueOnce(new Error('boom'));
+      renderWithProviders(repos);
+
+      expect(await screen.findByText('Error al cargar las cotizaciones')).toBeInTheDocument();
+    });
+
+    it('re-runs the read when Reintentar is clicked and then shows the quotes', async () => {
+      const user = userEvent.setup();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      await seedQuotes(repos, mockQuotes);
+      const listSpy = vi
+        .spyOn(repos.quotes, 'listOwn')
+        .mockRejectedValueOnce(new Error('boom'));
+      renderWithProviders(repos);
+
+      await screen.findByText(/no se pudieron cargar las cotizaciones/i);
+      const callsBefore = listSpy.mock.calls.length;
+      await user.click(screen.getByRole('button', { name: /^reintentar$/i }));
+
+      expect(await screen.findByText(/15 de enero de 2024/i)).toBeInTheDocument();
+      expect(listSpy.mock.calls.length).toBe(callsBefore + 1);
+    });
+
+    it('does not start a second read while a retry is in flight', async () => {
+      const user = userEvent.setup();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      let resolveRead!: (rows: SavedQuote[]) => void;
+      const pending = new Promise<SavedQuote[]>((resolve) => {
+        resolveRead = resolve;
+      });
+      const listSpy = vi
+        .spyOn(repos.quotes, 'listOwn')
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockReturnValueOnce(pending);
+      renderWithProviders(repos);
+
+      await screen.findByText(/no se pudieron cargar las cotizaciones/i);
+      const callsBefore = listSpy.mock.calls.length;
+      await user.click(screen.getByRole('button', { name: /^reintentar$/i }));
+
+      const busy = screen.getByRole('button', { name: /reintentando/i });
+      expect(busy).toBeDisabled();
+      fireEvent.click(busy);
+      expect(listSpy.mock.calls.length).toBe(callsBefore + 1);
+
+      resolveRead([]);
+      expect(await screen.findByText(/no hay cotizaciones guardadas/i)).toBeInTheDocument();
+    });
   });
 
   describe('empty state', () => {
@@ -176,6 +244,32 @@ describe('QuoteHistory', () => {
 
       expect(screen.getByText(/15 de enero de 2024/i)).toBeInTheDocument();
       expect(await repos.quotes.listOwn(USER_ID)).toHaveLength(2);
+    });
+
+    it('issues one delete when the button is tapped twice while pending (issue #91)', async () => {
+      await seedQuotes(repos, mockQuotes);
+      vi.stubGlobal('confirm', vi.fn(() => true));
+      let release: () => void = () => {};
+      const remove = vi.spyOn(repos.quotes, 'remove').mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+      );
+
+      renderWithProviders(repos);
+
+      await screen.findByText(/15 de enero de 2024/i);
+      const button = screen.getAllByRole('button', { name: /eliminar/i })[0];
+      fireEvent.click(button);
+      fireEvent.click(button);
+
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(button).toBeDisabled();
+
+      await act(async () => {
+        release();
+      });
     });
   });
 

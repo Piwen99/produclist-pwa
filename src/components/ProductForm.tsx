@@ -1,11 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type { Product, ProductInput, Category } from '../types/product';
 import { calcPrecioBruto, isValidChileanFormat } from '../utils/price';
 import { useModalA11y } from '../hooks/useModalA11y';
 
 interface ProductFormProps {
   product?: Product;
-  onSubmit: (data: ProductInput) => void;
+  /** Returning the write's promise lets the form stay in flight until it settles. */
+  onSubmit: (data: ProductInput) => Promise<void> | void;
   onCancel: () => void;
 }
 
@@ -34,6 +35,10 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
   );
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  // Re-entrancy guard: the ref flips synchronously, so a second submit is ignored
+  // before React re-renders and disables the button (same as ListSends).
+  const submittingRef = useRef(false);
 
   // Focus trap, Escape handling, initial focus and focus restore. The modal is
   // conditionally mounted, so it stays active for its whole lifetime.
@@ -65,10 +70,17 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
     return Object.keys(newErrors).length === 0;
   }, [formData, precioNetoStr]);
 
-  const handleSubmit = useCallback((e: React.SyntheticEvent) => {
+  const handleSubmit = useCallback(async (e: React.SyntheticEvent) => {
     e.preventDefault();
-    if (validate()) {
-      onSubmit({ ...formData, formato: formData.formato.trim() });
+    if (submittingRef.current) return;
+    if (!validate()) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      await onSubmit({ ...formData, formato: formData.formato.trim() });
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   }, [formData, onSubmit, validate]);
 
@@ -110,7 +122,7 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
             {isEditing ? 'Editar Producto' : 'Nuevo Producto'}
           </h2>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={(e) => { void handleSubmit(e); }} className="space-y-4">
             {/* Nombre */}
             <div>
               <label htmlFor="nombre" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -229,7 +241,8 @@ export function ProductForm({ product, onSubmit, onCancel }: ProductFormProps) {
               </button>
               <button
                 type="submit"
-                className="flex-1 px-4 py-3 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors touch-manipulation"
+                disabled={submitting}
+                className="flex-1 px-4 py-3 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors touch-manipulation disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isEditing ? 'Guardar Cambios' : 'Crear Producto'}
               </button>

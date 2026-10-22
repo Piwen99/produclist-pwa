@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { StrictMode, type ReactNode } from 'react';
-import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { DataProvider, SEED_TIMEOUT_MS } from '../DataProvider';
 import { useData } from '../useData';
 import { createInMemoryRepositories } from '../testing/inMemoryRepos';
@@ -64,6 +64,7 @@ function Probe() {
         {data.products ? String(data.products.length) : 'undefined'}
       </span>
       <span data-testid="user">{data.userId}</span>
+      <span data-testid="error">{String(data.productsError)}</span>
       <button
         onClick={() => {
           void data.addProduct(INPUT);
@@ -84,6 +85,13 @@ function Probe() {
         }}
       >
         delete
+      </button>
+      <button
+        onClick={() => {
+          void data.retryLoad();
+        }}
+      >
+        retry
       </button>
     </div>
   );
@@ -139,6 +147,73 @@ describe('DataProvider', () => {
 
     await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(2));
     expect(screen.getByTestId('count')).toHaveTextContent('1');
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it('reports a failed refresh through productsError and clears it on the next success', async () => {
+    const listOwn = vi
+      .fn<ProductsRepo['listOwn']>()
+      .mockResolvedValueOnce([P1])
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce([P1]);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderProbe(withProducts(createRepo({ listOwn })));
+
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
+    expect(screen.getByTestId('error')).toHaveTextContent('false');
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('true'));
+    // The last good snapshot keeps being served while the failure is reported.
+    expect(screen.getByTestId('count')).toHaveTextContent('1');
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('false'));
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it('reports a failed first load while the catalog stays undefined', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockRejectedValue(new Error('offline'));
+    renderProbe(withProducts(createRepo({ listOwn })));
+
+    await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('true'));
+    expect(screen.getByTestId('count')).toHaveTextContent('undefined');
+    expect(errorSpy).toHaveBeenCalled();
+  });
+
+  it('ignores a stale failed refresh so it cannot flag a newer snapshot as failed', async () => {
+    const older = deferred<Product[]>();
+    const newer = deferred<Product[]>();
+    const listOwn = vi
+      .fn<ProductsRepo['listOwn']>()
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    renderProbe(withProducts(createRepo({ listOwn })));
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(1));
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+    await waitFor(() => expect(listOwn).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      newer.resolve([P1]);
+      await newer.promise;
+    });
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
+
+    // The stale request fails late: it must not flag the snapshot it lost to.
+    await act(async () => {
+      older.reject(new Error('late'));
+      await older.promise.catch(() => undefined);
+    });
+    expect(screen.getByTestId('error')).toHaveTextContent('false');
     expect(errorSpy).toHaveBeenCalled();
   });
 
@@ -301,14 +376,50 @@ describe('DataProvider', () => {
     renderProbe(withProducts(createRepo({ seedIfEmpty, listOwn })));
 
     await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
+    // The catalog loaded, so a failed seed is not a screen-level error.
+    expect(screen.getByTestId('error')).toHaveTextContent('false');
     expect(errorSpy).toHaveBeenCalledWith(
       '[DataProvider] Failed to seed products',
       expect.any(Error),
     );
   });
 
-  it('still refreshes when seeding never settles (bounded wait)', async () => {
-    vi.useFakeTimers();
+  it('flags a failed seed when the catalog ends up empty (issue #91 residual)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const seedIfEmpty = vi
+      .fn<ProductsRepo['seedIfEmpty']>()
+      .mockRejectedValue(new Error('seed down'));
+    const listOwn = vi.fn<ProductsRepo['listOwn']>().mockResolvedValue([]);
+    renderProbe(withProducts(createRepo({ seedIfEmpty, listOwn })));
+
+    // An empty successful read after a failed seed is not "Sin productos": the
+    // user has to see the failure and a retry that tries again.
+    await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('true'));
+    expect(screen.getByTestId('count')).toHaveTextContent('0');
+  });
+
+  it('retryLoad seeds again and clears the failure', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const seedIfEmpty = vi
+      .fn<ProductsRepo['seedIfEmpty']>()
+      .mockRejectedValueOnce(new Error('seed down'))
+      .mockResolvedValue(undefined);
+    const listOwn = vi
+      .fn<ProductsRepo['listOwn']>()
+      .mockResolvedValueOnce([])
+      .mockResolvedValue([P1]);
+    renderProbe(withProducts(createRepo({ seedIfEmpty, listOwn })));
+
+    await waitFor(() => expect(screen.getByTestId('error')).toHaveTextContent('true'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'retry' }));
+
+    await waitFor(() => expect(screen.getByTestId('count')).toHaveTextContent('1'));
+    expect(seedIfEmpty).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('error')).toHaveTextContent('false');
+  });
+
+  it('still refreshes when seeding never settles (bounded wait)', async () => {    vi.useFakeTimers();
     try {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const seedIfEmpty = vi
